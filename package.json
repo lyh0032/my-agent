@@ -1,7 +1,0 @@
-{
-  "dependencies": {
-    "@langchain/core": "latest",
-    "@langchain/streaming": "latest",
-    "qwen-sdk": "latest"
-  }
-}
