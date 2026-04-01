@@ -1,0 +1,1 @@
+{\n  "name": "my-agent",\n  "version": "1.0.0",\n  "main": "src/app.ts",\n  "scripts": {\n    "start": "ts-node src/app.ts"\n  },\n  "dependencies": {\n    "express": "^4.17.1",\n    "prisma": "^2.22.1",\n    "sqlite3": "^5.0.2"\n  },\n  "devDependencies": {\n    "ts-node": "^10.2.0",\n    "typescript": "^4.3.2"\n  }\n}
