@@ -13,7 +13,7 @@
       />
       <div class="chat-layout__sidebar-actions">
         <el-button plain @click="router.push('/memories')">管理记忆</el-button>
-        <el-button text @click="handleLogout">退出登录</el-button>
+        <el-button type="danger" @click="handleLogout">退出登录</el-button>
       </div>
     </aside>
 
@@ -26,8 +26,8 @@
         <span class="chat-layout__user">{{ authStore.user?.username }}</span>
       </header>
 
-      <section class="chat-layout__messages">
-        <MessageList :messages="chatStore.messages" :streaming="chatStore.isSending" />
+      <section class="chat-layout__messages" :key="route.query.conversationId as string">
+        <MessageList ref="msgRef" :messages="chatStore.messages" :streaming="chatStore.isSending" />
       </section>
 
       <footer class="chat-layout__composer">
@@ -38,7 +38,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import { onMounted, watch, ref, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ConversationList from '../components/chat/ConversationList.vue'
@@ -51,6 +51,8 @@ const authStore = useAuthStore()
 const chatStore = useChatStore()
 const router = useRouter()
 const route = useRoute()
+
+const msgRef = ref<InstanceType<typeof MessageList>>()
 
 onMounted(async () => {
   await chatStore.loadConversations()
@@ -72,6 +74,8 @@ watch(
   async (conversationId) => {
     if (typeof conversationId === 'string' && conversationId !== chatStore.activeConversationId) {
       await chatStore.selectConversation(conversationId)
+      await nextTick()
+      msgRef.value?.scrollToBottom()
     }
   }
 )
@@ -86,6 +90,8 @@ async function handleSelectConversation(conversationId: string) {
 }
 
 async function handleSendMessage(content: string) {
+  msgRef.value?.scrollToBottom(false)
+  return console.log(msgRef.value)
   const hadConversation = Boolean(chatStore.activeConversationId)
   const result = await chatStore.sendMessage(content)
 
@@ -100,11 +106,12 @@ async function handleLogout() {
 }
 </script>
 
-<style scoped>
+<style scoped lang="less">
 .chat-layout {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: 320px 1fr;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
 }
 
 .chat-layout__sidebar {
@@ -115,6 +122,7 @@ async function handleLogout() {
   background: rgba(255, 255, 255, 0.7);
   border-right: 1px solid rgba(18, 52, 88, 0.08);
   backdrop-filter: blur(18px);
+  max-width: 350px;
 }
 
 .chat-layout__brand h1,
@@ -135,13 +143,16 @@ async function handleLogout() {
 .chat-layout__sidebar-actions {
   display: grid;
   gap: 10px;
+  .el-button {
+    width: 100%;
+    margin: 0px;
+  }
 }
 
 .chat-layout__main {
+  flex: 1;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  padding: 24px;
-  gap: 20px;
 }
 
 .chat-layout__header {
@@ -149,6 +160,8 @@ async function handleLogout() {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid rgba(18, 52, 88, 0.2);
 }
 
 .chat-layout__user {
@@ -160,11 +173,11 @@ async function handleLogout() {
 
 .chat-layout__messages {
   min-height: 0;
-  padding: 8px 0;
 }
 
 .chat-layout__composer {
-  padding-top: 8px;
+  padding: 16px;
+  border-top: 1px solid rgba(18, 52, 88, 0.2);
 }
 
 @media (max-width: 960px) {

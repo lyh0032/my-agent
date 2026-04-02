@@ -1,5 +1,5 @@
 <template>
-  <div class="message-list">
+  <div class="message-list" ref="listRef">
     <div v-if="messages.length === 0" class="message-list__empty">
       <h3>开始一段新对话</h3>
       <p>输入你的问题，系统会保存会话和消息历史。</p>
@@ -22,12 +22,24 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted, ref, nextTick } from 'vue'
 import type { Message } from '../../types/chat'
+
+const listRef = ref<HTMLDivElement>()
 
 const props = defineProps<{
   messages: Message[]
   streaming?: boolean
 }>()
+
+defineExpose({
+  scrollToBottom(isSmooth = true) {
+    console.log(listRef.value)
+    if (listRef.value) {
+      scrollToBottom(listRef.value, isSmooth)
+    }
+  }
+})
 
 const roleLabelMap = {
   user: '你',
@@ -42,12 +54,33 @@ function showStreamingCursor(message: Message) {
     props.messages[props.messages.length - 1]?.id === message.id
   )
 }
+
+function scrollToBottom(element: HTMLElement, isSmooth = true) {
+  let target = element
+
+  const scrollHeight = target.scrollHeight
+
+  if ('scrollTo' in target) {
+    try {
+      target.scrollTo({
+        top: scrollHeight,
+        behavior: isSmooth ? 'smooth' : 'auto'
+      })
+      return // 成功执行则退出
+    } catch (e) {
+      console.warn('平滑滚动不支持或出错，降级为直接滚动', e)
+    }
+  }
+
+  target.scrollTop = scrollHeight
+}
 </script>
 
 <style scoped>
 .message-list {
   height: 100%;
   overflow: auto;
+  padding: 0 16px;
 }
 
 .message-list__empty {
