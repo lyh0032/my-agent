@@ -8,7 +8,7 @@ const isProduction = nodeEnv === 'production'
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().positive().default(3000),
+  PORT: z.coerce.number().int().positive().default(5172),
   DATABASE_URL: isProduction ? z.string().min(1) : z.string().min(1).default('file:./dev.db'),
   JWT_SECRET: isProduction
     ? z.string().min(8)
@@ -16,9 +16,15 @@ const envSchema = z.object({
   DASHSCOPE_API_KEY: z.string().optional(),
   DASHSCOPE_BASE_URL: z.string().url().default('https://dashscope.aliyuncs.com/compatible-mode/v1'),
   DASHSCOPE_MODEL: z.string().default('qwen-plus'),
+  DASHSCOPE_WEBSEARCH_MCP_URL: z
+    .string()
+    .url()
+    .default('https://dashscope.aliyuncs.com/api/v1/mcps/WebSearch/mcp'),
+  DASHSCOPE_WEBSEARCH_ENABLED: z.coerce.boolean().default(true),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_BASE_URL: z.string().url().optional(),
-  OPENAI_MODEL: z.string().optional()
+  OPENAI_MODEL: z.string().optional(),
+  MCP_SERVERS: z.string().optional()
 })
 
 const parsedEnv = envSchema.safeParse(process.env)

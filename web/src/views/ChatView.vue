@@ -10,6 +10,7 @@
         :active-conversation-id="chatStore.activeConversationId"
         @create="handleCreateConversation"
         @select="handleSelectConversation"
+        @delete="handleDeleteConversation"
       />
       <div class="chat-layout__sidebar-actions">
         <el-button plain @click="router.push('/memories')">管理记忆</el-button>
@@ -63,7 +64,9 @@ onMounted(async () => {
   } else if (chatStore.activeConversationId) {
     await router.replace({
       path: '/chat',
-      query: { conversationId: chatStore.activeConversationId }
+      query: {
+        conversationId: chatStore.activeConversationId
+      }
     })
     await chatStore.selectConversation(chatStore.activeConversationId)
   }
@@ -82,16 +85,41 @@ watch(
 
 async function handleCreateConversation() {
   const conversation = await chatStore.createConversation()
-  await router.push({ path: '/chat', query: { conversationId: conversation.id } })
+  await router.push({
+    path: '/chat',
+    query: {
+      conversationId: conversation.id
+    }
+  })
 }
 
 async function handleSelectConversation(conversationId: string) {
-  await router.push({ path: '/chat', query: { conversationId } })
+  await router.push({
+    path: '/chat',
+    query: {
+      conversationId
+    }
+  })
+}
+
+async function handleDeleteConversation(conversationId: string) {
+  await chatStore.deleteConversation(conversationId)
+  await chatStore.loadConversations()
+  if (chatStore.conversations.length > 0) {
+    await router.replace({
+      query: {
+        conversationId: chatStore.activeConversationId
+      }
+    })
+  } else {
+    await router.replace({
+      query: void 0
+    })
+  }
 }
 
 async function handleSendMessage(content: string) {
   msgRef.value?.scrollToBottom(false)
-  return console.log(msgRef.value)
   const hadConversation = Boolean(chatStore.activeConversationId)
   const result = await chatStore.sendMessage(content)
 
@@ -115,14 +143,16 @@ async function handleLogout() {
 }
 
 .chat-layout__sidebar {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 16px;
-  padding: 20px;
   background: rgba(255, 255, 255, 0.7);
   border-right: 1px solid rgba(18, 52, 88, 0.08);
   backdrop-filter: blur(18px);
-  max-width: 350px;
+  width: 350px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.chat-layout__brand {
+  padding: 16px;
 }
 
 .chat-layout__brand h1,
@@ -141,8 +171,10 @@ async function handleLogout() {
 }
 
 .chat-layout__sidebar-actions {
+  padding: 16px;
   display: grid;
   gap: 10px;
+  box-shadow: 0px -3px 16px 0px rgb(210 210 210 / 50%);
   .el-button {
     width: 100%;
     margin: 0px;

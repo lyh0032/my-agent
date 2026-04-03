@@ -1,8 +1,15 @@
-import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages'
+import {
+  AIMessage,
+  HumanMessage,
+  SystemMessage,
+  ToolMessage,
+  type BaseMessage
+} from '@langchain/core/messages'
 import { ChatOpenAI } from '@langchain/openai'
 
 import { env } from '../config/env'
 import { AppError } from '../utils/app-error'
+import { tools } from './agent/tools'
 
 type ConversationMessage = {
   role: 'user' | 'assistant' | 'system'
@@ -15,23 +22,33 @@ type GenerateAssistantReplyParams = {
   conversationHistory: ConversationMessage[]
 }
 
-let chatModel: ChatOpenAI | null = null
+type ChatModelWithTools = ReturnType<ChatOpenAI['bindTools']>
 
-function getChatModel(): ChatOpenAI {
-  console.log(env)
+const MAX_TOOL_CALL_ROUNDS = 5
+const toolsByName = new Map(tools.map((tool) => [tool.name, tool]))
+let chatModelPromise: Promise<ChatModelWithTools> | null = null
+
+async function getChatModel(): Promise<ChatModelWithTools> {
   if (!env.LLM_API_KEY) {
     throw new AppError(500, '阿里云百炼 API 未配置', 'MODEL_CONFIG_MISSING')
   }
 
-  if (!chatModel) {
-    chatModel = new ChatOpenAI({
-      apiKey: env.LLM_API_KEY,
-      model: env.LLM_MODEL,
-      configuration: env.LLM_BASE_URL ? { baseURL: env.LLM_BASE_URL } : undefined
+  if (!chatModelPromise) {
+    chatModelPromise = (async () => {
+      const baseModel = new ChatOpenAI({
+        apiKey: env.LLM_API_KEY,
+        model: env.LLM_MODEL,
+        configuration: env.LLM_BASE_URL ? { baseURL: env.LLM_BASE_URL } : undefined
+      })
+
+      return baseModel.bindTools(tools)
+    })().catch((error) => {
+      chatModelPromise = null
+      throw error
     })
   }
 
-  return chatModel
+  return chatModelPromise
 }
 
 function buildLangChainMessages({
@@ -89,34 +106,71 @@ function normalizeContent(content: unknown): string {
   return ''
 }
 
-export async function generateAssistantReply({
-  latestUserMessage,
-  memoryContext,
-  conversationHistory
-}: GenerateAssistantReplyParams): Promise<string> {
-  const model = getChatModel()
-  const messages = buildLangChainMessages({
-    latestUserMessage,
-    memoryContext,
-    conversationHistory
-  })
+function stringifyToolResult(result: unknown): string {
+  if (typeof result === 'string') {
+    return result
+  }
+
+  if (result == null) {
+    return ''
+  }
 
   try {
-    const result = await model.invoke(messages)
-    const content = normalizeContent(result.content)
-
-    if (!content) {
-      throw new AppError(502, '模型返回了空响应', 'MODEL_EMPTY_RESPONSE')
-    }
-
-    return content
-  } catch (error) {
-    if (error instanceof AppError) {
-      throw error
-    }
-
-    throw new AppError(502, '模型请求失败', 'MODEL_REQUEST_FAILED')
+    return JSON.stringify(result)
+  } catch {
+    return String(result)
   }
+}
+
+async function executeToolCalls(toolCalls: AIMessage['tool_calls']): Promise<ToolMessage[]> {
+  return Promise.all(
+    (toolCalls ?? []).map(async (toolCall) => {
+      const currentTool = toolsByName.get(toolCall.name)
+
+      if (!currentTool) {
+        throw new AppError(500, `未找到工具：${toolCall.name}`, 'MODEL_TOOL_NOT_FOUND')
+      }
+
+      if (!toolCall.id) {
+        throw new AppError(502, '模型返回的工具调用缺少 id', 'MODEL_TOOL_CALL_INVALID')
+      }
+
+      try {
+        const result = await currentTool.invoke(toolCall.args ?? {})
+
+        return new ToolMessage({
+          tool_call_id: toolCall.id,
+          content: stringifyToolResult(result),
+          status: 'success'
+        })
+      } catch (error) {
+        return new ToolMessage({
+          tool_call_id: toolCall.id,
+          content: error instanceof Error ? error.message : '工具执行失败',
+          status: 'error'
+        })
+      }
+    })
+  )
+}
+
+async function resolveMessagesForStreaming(model: ChatModelWithTools, messages: BaseMessage[]) {
+  const currentMessages: BaseMessage[] = [...messages]
+
+  for (let round = 0; round < MAX_TOOL_CALL_ROUNDS; round += 1) {
+    const result = await model.invoke(currentMessages)
+
+    if (!result.tool_calls?.length) {
+      return currentMessages
+    }
+
+    currentMessages.push(result)
+
+    const toolMessages = await executeToolCalls(result.tool_calls)
+    currentMessages.push(...toolMessages)
+  }
+
+  throw new AppError(502, '模型工具调用次数过多', 'MODEL_TOOL_CALL_LIMIT')
 }
 
 export async function* streamAssistantReply({
@@ -124,7 +178,7 @@ export async function* streamAssistantReply({
   memoryContext,
   conversationHistory
 }: GenerateAssistantReplyParams): AsyncGenerator<string, string, void> {
-  const model = getChatModel()
+  const model = await getChatModel()
   const messages = buildLangChainMessages({
     latestUserMessage,
     memoryContext,
@@ -134,7 +188,8 @@ export async function* streamAssistantReply({
   let fullText = ''
 
   try {
-    const stream = await model.stream(messages)
+    const resolvedMessages = await resolveMessagesForStreaming(model, messages)
+    const stream = await model.stream(resolvedMessages)
 
     for await (const chunk of stream) {
       const delta = normalizeContent(chunk.content)
@@ -146,12 +201,38 @@ export async function* streamAssistantReply({
       fullText += delta
       yield delta
     }
+
+    if (!fullText.trim()) {
+      const fallbackResult = await model.invoke(resolvedMessages)
+      const fallbackContent = normalizeContent(fallbackResult.content)
+
+      if (fallbackContent) {
+        fullText = fallbackContent
+        yield fallbackContent
+      }
+    }
   } catch (error) {
     if (error instanceof AppError) {
       throw error
     }
 
     throw new AppError(502, '模型流式请求失败', 'MODEL_STREAM_FAILED')
+  }
+
+  if (!fullText.trim()) {
+    throw new AppError(502, '模型返回了空响应', 'MODEL_EMPTY_RESPONSE')
+  }
+
+  return fullText
+}
+
+export async function generateAssistantReply(
+  params: GenerateAssistantReplyParams
+): Promise<string> {
+  let fullText = ''
+
+  for await (const delta of streamAssistantReply(params)) {
+    fullText += delta
   }
 
   if (!fullText.trim()) {

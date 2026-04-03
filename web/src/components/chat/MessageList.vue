@@ -12,18 +12,24 @@
         :class="`message-bubble--${message.role}`"
       >
         <span class="message-bubble__role">{{ roleLabelMap[message.role] }}</span>
-        <p>
-          {{ message.content
-          }}<span v-if="showStreamingCursor(message)" class="message-bubble__cursor"></span>
-        </p>
+        <div
+          class="message-bubble__content"
+          v-html="
+            message.role !== 'user'
+              ? renderedContent(message)
+              : `<div style='white-space: pre-wrap;'>${message.content}</div>`
+          "
+        ></div>
+        <span v-if="showStreamingCursor(message)" class="message-bubble__cursor"></span>
       </article>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, nextTick } from 'vue'
+import { ref } from 'vue'
 import type { Message } from '../../types/chat'
+import { renderMarkdown } from '../../utils/markdown'
 
 const listRef = ref<HTMLDivElement>()
 
@@ -55,6 +61,10 @@ function showStreamingCursor(message: Message) {
   )
 }
 
+function renderedContent(message: Message) {
+  return renderMarkdown(message.content)
+}
+
 function scrollToBottom(element: HTMLElement, isSmooth = true) {
   let target = element
 
@@ -80,7 +90,7 @@ function scrollToBottom(element: HTMLElement, isSmooth = true) {
 .message-list {
   height: 100%;
   overflow: auto;
-  padding: 0 16px;
+  padding: 16px;
 }
 
 .message-list__empty {
@@ -100,7 +110,7 @@ function scrollToBottom(element: HTMLElement, isSmooth = true) {
   max-width: 760px;
   padding: 16px 18px;
   border-radius: 20px;
-  background: #f4f7fb;
+  background: #d3e5ff;
   color: #142235;
 }
 
@@ -126,12 +136,100 @@ function scrollToBottom(element: HTMLElement, isSmooth = true) {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  user-select: none;
 }
 
-.message-bubble p {
-  margin: 0;
+.message-bubble__content {
   line-height: 1.7;
-  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.message-bubble__content :deep(:first-child) {
+  margin-top: 0;
+}
+
+.message-bubble__content :deep(:last-child) {
+  margin-bottom: 0;
+}
+
+.message-bubble__content :deep(p) {
+  margin: 0 0 0.85em;
+}
+
+.message-bubble__content :deep(ul),
+.message-bubble__content :deep(ol) {
+  margin: 0 0 0.85em;
+  padding-left: 1.5em;
+}
+
+.message-bubble__content :deep(li + li) {
+  margin-top: 0.35em;
+}
+
+.message-bubble__content :deep(blockquote) {
+  margin: 0 0 0.85em;
+  padding: 0.75em 1em;
+  border-left: 4px solid rgba(18, 52, 88, 0.18);
+  background: rgba(18, 52, 88, 0.05);
+  border-radius: 0 12px 12px 0;
+}
+
+.message-bubble__content :deep(pre) {
+  margin: 0 0 0.85em;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border-radius: 14px;
+  background: rgba(12, 23, 40, 0.92);
+  color: #f5f7fa;
+}
+
+.message-bubble__content :deep(code) {
+  padding: 0.15em 0.35em;
+  border-radius: 6px;
+  background: rgba(18, 52, 88, 0.08);
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.95em;
+}
+
+.message-bubble__content :deep(pre code) {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 0.92em;
+}
+
+.message-bubble__content :deep(table) {
+  display: block;
+  width: 100%;
+  margin: 0 0 0.85em;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.message-bubble__content :deep(th),
+.message-bubble__content :deep(td) {
+  padding: 10px 12px;
+  border: 1px solid rgba(18, 52, 88, 0.14);
+  text-align: left;
+  vertical-align: top;
+}
+
+.message-bubble__content :deep(th) {
+  background: rgba(18, 52, 88, 0.06);
+  font-weight: 700;
+}
+
+.message-bubble__content :deep(hr) {
+  margin: 1em 0;
+  border: 0;
+  border-top: 1px solid rgba(18, 52, 88, 0.16);
+}
+
+.message-bubble__content :deep(a) {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .message-bubble__cursor {

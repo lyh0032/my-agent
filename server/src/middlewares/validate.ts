@@ -14,11 +14,11 @@ export function validate(schema: ValidateSchema): RequestHandler {
     }
 
     if (schema.query) {
-      req.query = schema.query.parse(req.query)
+      req.query = schema.query.parse(req.query) as typeof req.query
     }
 
     if (schema.params) {
-      req.params = schema.params.parse(req.params)
+      req.params = schema.params.parse(req.params) as typeof req.params
     }
 
     next()
