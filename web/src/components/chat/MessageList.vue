@@ -27,12 +27,31 @@
         ></div>
         <span v-if="showStreamingCursor(message)" class="message-bubble__cursor"></span>
       </article>
+      <article
+        v-if="showThinkingBubble"
+        class="message-bubble message-bubble--assistant message-bubble--thinking"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <span class="message-bubble__role">
+          {{ roleLabelMap.assistant }}
+          <span class="message-bubble__time">思考中...</span>
+        </span>
+        <div class="message-bubble__thinking">
+          <span class="message-bubble__thinking-text">正在整理回答</span>
+          <span class="message-bubble__thinking-dots" aria-hidden="true">
+            <i></i>
+            <i></i>
+            <i></i>
+          </span>
+        </div>
+      </article>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { Message } from '../../types/chat'
 import { renderMarkdown } from '../../utils/markdown'
 import { dayjs } from 'element-plus'
@@ -65,6 +84,14 @@ function showStreamingCursor(message: Message) {
     props.messages[props.messages.length - 1]?.id === message.id
   )
 }
+
+const showThinkingBubble = computed(() => {
+  if (props.streaming !== true || props.messages.length === 0) {
+    return false
+  }
+
+  return props.messages[props.messages.length - 1]?.role !== 'assistant'
+})
 
 function renderedContent(message: Message) {
   return renderMarkdown(message.content)
@@ -127,6 +154,10 @@ function scrollToBottom(element: HTMLElement, isSmooth = true) {
 
 .message-bubble--assistant {
   margin-right: auto;
+}
+
+.message-bubble--thinking {
+  min-width: 220px;
 }
 
 .message-bubble--system {
@@ -252,9 +283,58 @@ function scrollToBottom(element: HTMLElement, isSmooth = true) {
   animation: blink 1s steps(1) infinite;
 }
 
+.message-bubble__thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.message-bubble__thinking-text {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.message-bubble__thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.message-bubble__thinking-dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.35;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.message-bubble__thinking-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.message-bubble__thinking-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
 @keyframes blink {
   50% {
     opacity: 0;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+
+  40% {
+    transform: translateY(-3px);
+    opacity: 1;
   }
 }
 </style>
