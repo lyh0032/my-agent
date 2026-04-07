@@ -72,6 +72,7 @@ function buildLangChainMessages({
     '工具使用规则：',
     '1. 只要用户询问实时新闻、最新动态、今天/最近发生了什么、当前价格、近期赛事结果等强时效性信息，必须先调用 webSearchTool。',
     '2. 工具返回后，要基于工具结果继续回答，不要忽略工具输出。',
+    '3. webSearchTool 返回的是检索原始结果，你需要自行提炼时间、事实、结论并组织成最终回答，不要把工具输出原样当成最终答案。',
     memoryContext.length > 0 ? `以下是当前用户的长期记忆：\n${memoryContext.join('\n')}` : ''
   ]
     .filter(Boolean)

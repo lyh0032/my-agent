@@ -1,6 +1,6 @@
 import { tool, type StructuredToolInterface } from '@langchain/core/tools'
 import { z } from 'zod'
-import { MyMcpClient, parseMcpResponseByChat } from './mcp'
+import { MyMcpClient, extractMcpToolText } from './mcp'
 import { env } from '../../config/env'
 
 export const toolType = {
@@ -22,16 +22,12 @@ export const webSearchTool = tool(
     await client.connect()
 
     const res = await client.callTool('bailian_web_search', { query })
-    const t = (res.content as any)[0]?.text || ''
-
-    const generator = parseMcpResponseByChat(t)
-
-    return generator
+    return extractMcpToolText(res)
   },
   {
     name: toolType.webSearchTool,
     description:
-      '处理实时互联网检索。只要用户在问实时新闻、最新动态、近期事件、当前价格、近况、时效性强的信息，都应该调用这个工具，再基于搜索结果回答。',
+      '处理实时互联网检索。只要用户在问实时新闻、最新动态、近期事件、当前价格、近况、时效性强的信息，都应该调用这个工具。工具会返回检索到的原始文本结果，你需要基于这些结果整理答案，优先提取时间、事实和关键信息。',
     schema: webSearchToolInputSchema
   }
 )

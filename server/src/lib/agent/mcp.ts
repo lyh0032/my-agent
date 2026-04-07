@@ -1,10 +1,7 @@
-import { ChatOpenAI } from '@langchain/openai'
-import { HumanMessage } from '@langchain/core/messages'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { env } from '../../config/env'
 
-function normalizeChunkContent(content: unknown): string {
+function normalizeMcpContent(content: unknown): string {
   if (typeof content === 'string') {
     return content
   }
@@ -16,16 +13,58 @@ function normalizeChunkContent(content: unknown): string {
           return item
         }
 
-        if (item && typeof item === 'object' && 'text' in item && typeof item.text === 'string') {
+        if (!item || typeof item !== 'object') {
+          return ''
+        }
+
+        if ('text' in item && typeof item.text === 'string') {
           return item.text
         }
 
-        return ''
+        if ('data' in item) {
+          try {
+            return JSON.stringify(item.data)
+          } catch {
+            return String(item.data)
+          }
+        }
+
+        try {
+          return JSON.stringify(item)
+        } catch {
+          return String(item)
+        }
       })
-      .join('')
+      .filter(Boolean)
+      .join('\n')
+      .trim()
   }
 
-  return ''
+  if (content == null) {
+    return ''
+  }
+
+  try {
+    return JSON.stringify(content)
+  } catch {
+    return String(content)
+  }
+}
+
+function extractMcpPayload(result: unknown): unknown {
+  if (!result || typeof result !== 'object') {
+    return result
+  }
+
+  if ('content' in result) {
+    return result.content
+  }
+
+  if ('toolResult' in result) {
+    return result.toolResult
+  }
+
+  return result
 }
 
 export class MyMcpClient {
@@ -62,28 +101,6 @@ export class MyMcpClient {
   }
 }
 
-export async function* parseMcpResponseByChat(str: string) {
-  const model = new ChatOpenAI({
-    apiKey: env.DASHSCOPE_API_KEY!,
-    model: 'qwen-plus',
-    configuration: {
-      baseURL: env.DASHSCOPE_BASE_URL
-    }
-  })
-
-  const stream = await model.stream([
-    new HumanMessage(`1、你现在是一个MCP结果解析助手，帮我解析这个MCP工具调用的结果，提取出来有用的信息并且简练
-      2、可以返回你认为合适的格式
-      3、注意你是直接给用户呈现的，相当于是一个中间件模型解析工具，请直接返回解析后的结果，不要任何多余的说明
-      以下是MCP接口返回的内容：
-      ${str}`)
-  ])
-
-  for await (const chunk of stream) {
-    const delta = normalizeChunkContent(chunk.content)
-
-    if (delta) {
-      yield delta
-    }
-  }
+export function extractMcpToolText(result: unknown): string {
+  return normalizeMcpContent(extractMcpPayload(result))
 }

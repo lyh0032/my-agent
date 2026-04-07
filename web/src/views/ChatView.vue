@@ -162,9 +162,10 @@ async function handleLogout() {
   background: rgba(255, 255, 255, 0.7);
   border-right: 1px solid rgba(18, 52, 88, 0.08);
   backdrop-filter: blur(18px);
-  width: 350px;
+  width: 300px;
   height: 100%;
   display: flex;
+  flex-shrink: 0;
   flex-direction: column;
 }
 .chat-layout__brand {
@@ -199,8 +200,10 @@ async function handleLogout() {
 
 .chat-layout__main {
   flex: 1;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
+  width: 0;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .chat-layout__header {
@@ -220,7 +223,10 @@ async function handleLogout() {
 }
 
 .chat-layout__messages {
-  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
 }
 
 .chat-layout__composer {

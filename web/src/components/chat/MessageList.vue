@@ -4,7 +4,7 @@
       <h3>开始一段新对话</h3>
       <p>输入你的问题，系统会保存会话和消息历史。</p>
     </div>
-    <div v-else class="message-list__items">
+    <template v-else>
       <article
         v-for="message in messages"
         :key="message.id"
@@ -46,7 +46,7 @@
           </span>
         </div>
       </article>
-    </div>
+    </template>
   </div>
 </template>
 
@@ -120,22 +120,27 @@ function scrollToBottom(element: HTMLElement, isSmooth = true) {
 
 <style scoped lang="less">
 .message-list {
+  flex: 1;
+  width: 0;
   height: 100%;
   overflow: auto;
   padding: 16px;
+  max-width: 1000px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  &::-webkit-scrollbar {
+    display: none;
+    width: 0;
+  }
 }
 
 .message-list__empty {
-  min-height: 100%;
   display: grid;
+  padding-top: 200px;
   place-items: center;
   text-align: center;
   color: #5f6774;
-}
-
-.message-list__items {
-  display: grid;
-  gap: 16px;
 }
 
 .message-bubble {
