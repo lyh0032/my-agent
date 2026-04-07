@@ -1,5 +1,6 @@
 import {
   AIMessage,
+  AIMessageChunk,
   HumanMessage,
   SystemMessage,
   ToolMessage,
@@ -173,6 +174,45 @@ async function resolveMessagesForStreaming(model: ChatModelWithTools, messages: 
   throw new AppError(502, '模型工具调用次数过多', 'MODEL_TOOL_CALL_LIMIT')
 }
 
+async function* streamAssistantReplyWithTools(
+  model: ChatModelWithTools,
+  messages: BaseMessage[]
+): AsyncGenerator<string, AIMessageChunk, void> {
+  const currentMessages: BaseMessage[] = [...messages]
+
+  for (let round = 0; round < MAX_TOOL_CALL_ROUNDS; round += 1) {
+    const stream = await model.stream(currentMessages)
+    let fullChunk: AIMessageChunk | null = null
+
+    for await (const chunk of stream) {
+      fullChunk = fullChunk ? fullChunk.concat(chunk) : chunk
+
+      const delta = normalizeContent(chunk.content)
+
+      if (!delta) {
+        continue
+      }
+
+      yield delta
+    }
+
+    if (!fullChunk) {
+      throw new AppError(502, '模型流式响应为空', 'MODEL_EMPTY_STREAM')
+    }
+
+    if (!fullChunk.tool_calls?.length) {
+      return fullChunk
+    }
+
+    currentMessages.push(fullChunk)
+
+    const toolMessages = await executeToolCalls(fullChunk.tool_calls)
+    currentMessages.push(...toolMessages)
+  }
+
+  throw new AppError(502, '模型工具调用次数过多', 'MODEL_TOOL_CALL_LIMIT')
+}
+
 export async function* streamAssistantReply({
   latestUserMessage,
   memoryContext,
@@ -188,21 +228,13 @@ export async function* streamAssistantReply({
   let fullText = ''
 
   try {
-    const resolvedMessages = await resolveMessagesForStreaming(model, messages)
-    const stream = await model.stream(resolvedMessages)
-
-    for await (const chunk of stream) {
-      const delta = normalizeContent(chunk.content)
-
-      if (!delta) {
-        continue
-      }
-
+    for await (const delta of streamAssistantReplyWithTools(model, messages)) {
       fullText += delta
       yield delta
     }
 
     if (!fullText.trim()) {
+      const resolvedMessages = await resolveMessagesForStreaming(model, messages)
       const fallbackResult = await model.invoke(resolvedMessages)
       const fallbackContent = normalizeContent(fallbackResult.content)
 

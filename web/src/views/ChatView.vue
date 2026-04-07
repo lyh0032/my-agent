@@ -78,10 +78,26 @@ watch(
     if (typeof conversationId === 'string' && conversationId !== chatStore.activeConversationId) {
       await chatStore.selectConversation(conversationId)
       await nextTick()
-      msgRef.value?.scrollToBottom()
+      scrollToBottom()
     }
   }
 )
+
+watch(
+  () => chatStore.messages,
+  () => {
+    nextTick(() => {
+      scrollToBottom()
+    })
+  },
+  {
+    deep: true
+  }
+)
+
+function scrollToBottom(animated = true) {
+  msgRef.value?.scrollToBottom(animated)
+}
 
 async function handleCreateConversation() {
   const conversation = await chatStore.createConversation()
@@ -119,7 +135,7 @@ async function handleDeleteConversation(conversationId: string) {
 }
 
 async function handleSendMessage(content: string) {
-  msgRef.value?.scrollToBottom(false)
+  scrollToBottom(false)
   const hadConversation = Boolean(chatStore.activeConversationId)
   const result = await chatStore.sendMessage(content)
 

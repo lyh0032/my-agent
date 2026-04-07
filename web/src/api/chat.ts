@@ -20,8 +20,30 @@ type ParsedSseEvent = {
   data: unknown
 }
 
+function findSseBoundary(buffer: string): { index: number; length: number } | null {
+  const crlfBoundaryIndex = buffer.indexOf('\r\n\r\n')
+
+  if (crlfBoundaryIndex >= 0) {
+    return {
+      index: crlfBoundaryIndex,
+      length: 4
+    }
+  }
+
+  const lfBoundaryIndex = buffer.indexOf('\n\n')
+
+  if (lfBoundaryIndex >= 0) {
+    return {
+      index: lfBoundaryIndex,
+      length: 2
+    }
+  }
+
+  return null
+}
+
 function parseSseEvent(chunk: string): ParsedSseEvent | null {
-  const lines = chunk.split('\n').filter(Boolean)
+  const lines = chunk.split(/\r?\n/).filter(Boolean)
 
   if (lines.length === 0) {
     return null
@@ -139,15 +161,21 @@ export async function streamMessage(
     const { done, value } = await reader.read()
 
     if (done) {
+      buffer += decoder.decode()
       break
     }
 
     buffer += decoder.decode(value, { stream: true })
 
-    while (buffer.includes('\n\n')) {
-      const boundaryIndex = buffer.indexOf('\n\n')
-      const rawEvent = buffer.slice(0, boundaryIndex)
-      buffer = buffer.slice(boundaryIndex + 2)
+    while (true) {
+      const boundary = findSseBoundary(buffer)
+
+      if (!boundary) {
+        break
+      }
+
+      const rawEvent = buffer.slice(0, boundary.index)
+      buffer = buffer.slice(boundary.index + boundary.length)
 
       const parsed = parseSseEvent(rawEvent)
 
@@ -174,6 +202,19 @@ export async function streamMessage(
         throw new Error(payload.message || '流式请求失败')
       }
     }
+  }
+
+  const remainingEvent = parseSseEvent(buffer.trim())
+
+  if (remainingEvent?.event === 'error' && remainingEvent.data) {
+    const payload = remainingEvent.data as { message?: string }
+    throw new Error(payload.message || '流式请求失败')
+  }
+
+  if (remainingEvent?.event === 'assistant-done' && remainingEvent.data) {
+    const payload = remainingEvent.data as { assistantMessage: Message; conversationId: string }
+    latestConversationId = payload.conversationId
+    handlers.onAssistantDone?.(payload)
   }
 
   return { conversationId: latestConversationId }

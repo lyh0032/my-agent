@@ -11,7 +11,12 @@
         class="message-bubble"
         :class="`message-bubble--${message.role}`"
       >
-        <span class="message-bubble__role">{{ roleLabelMap[message.role] }}</span>
+        <span class="message-bubble__role">
+          {{ roleLabelMap[message.role] }}
+          <span class="message-bubble__time">{{
+            dayjs(message.createdAt).format('YYYY-MM-DD HH:mm:ss')
+          }}</span>
+        </span>
         <div
           class="message-bubble__content"
           v-html="
@@ -30,6 +35,7 @@
 import { ref } from 'vue'
 import type { Message } from '../../types/chat'
 import { renderMarkdown } from '../../utils/markdown'
+import { dayjs } from 'element-plus'
 
 const listRef = ref<HTMLDivElement>()
 
@@ -40,7 +46,6 @@ const props = defineProps<{
 
 defineExpose({
   scrollToBottom(isSmooth = true) {
-    console.log(listRef.value)
     if (listRef.value) {
       scrollToBottom(listRef.value, isSmooth)
     }
@@ -86,7 +91,7 @@ function scrollToBottom(element: HTMLElement, isSmooth = true) {
 }
 </script>
 
-<style scoped>
+<style scoped lang="less">
 .message-list {
   height: 100%;
   overflow: auto;
@@ -137,6 +142,11 @@ function scrollToBottom(element: HTMLElement, isSmooth = true) {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   user-select: none;
+}
+
+.message-bubble__time {
+  color: #888888;
+  font-size: 10px;
 }
 
 .message-bubble__content {

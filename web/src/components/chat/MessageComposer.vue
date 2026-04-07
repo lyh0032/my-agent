@@ -3,15 +3,11 @@
     <el-input
       v-model="content"
       type="textarea"
-      :rows="4"
       resize="none"
-      placeholder="输入问题，回车发送，Shift + 回车换行"
+      placeholder="输入问题，回车发送，Shift + 回车换行，聊天消息会自动保存到当前会话"
       @keydown.enter.exact.prevent="handleSubmit"
     />
-    <div class="composer__actions">
-      <span class="composer__hint">聊天消息会自动保存到当前会话</span>
-      <el-button type="primary" :loading="loading" @click="handleSubmit">发送</el-button>
-    </div>
+    <el-button type="primary" :loading="loading" @click="handleSubmit">发送</el-button>
   </div>
 </template>
 
@@ -40,21 +36,24 @@ function handleSubmit() {
 }
 </script>
 
-<style scoped>
+<style scoped lang="less">
 .composer {
-  display: grid;
-  gap: 12px;
-}
-
-.composer__actions {
+  height: 110px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
+  gap: 16px;
 
-.composer__hint {
-  color: #5f6774;
-  font-size: 13px;
+  .el-textarea {
+    flex: 1;
+    height: 100%;
+    ::v-deep {
+      .el-textarea__inner {
+        height: 100%;
+      }
+    }
+  }
+
+  .el-button {
+    height: 100%;
+  }
 }
 </style>
