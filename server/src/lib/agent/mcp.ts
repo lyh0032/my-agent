@@ -4,6 +4,30 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { env } from '../../config/env'
 
+function normalizeChunkContent(content: unknown): string {
+  if (typeof content === 'string') {
+    return content
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((item) => {
+        if (typeof item === 'string') {
+          return item
+        }
+
+        if (item && typeof item === 'object' && 'text' in item && typeof item.text === 'string') {
+          return item.text
+        }
+
+        return ''
+      })
+      .join('')
+  }
+
+  return ''
+}
+
 export class MyMcpClient {
   client: Client
   transport: StreamableHTTPClientTransport
@@ -40,10 +64,10 @@ export class MyMcpClient {
 
 export async function* parseMcpResponseByChat(str: string) {
   const model = new ChatOpenAI({
+    apiKey: env.DASHSCOPE_API_KEY!,
     model: 'qwen-plus',
     configuration: {
-      apiKey: env.DASHSCOPE_API_KEY!,
-      baseURL: env.DASHSCOPE_WEBSEARCH_MCP_URL
+      baseURL: env.DASHSCOPE_BASE_URL
     }
   })
 
@@ -56,8 +80,10 @@ export async function* parseMcpResponseByChat(str: string) {
   ])
 
   for await (const chunk of stream) {
-    if (chunk.content) {
-      yield chunk.content
+    const delta = normalizeChunkContent(chunk.content)
+
+    if (delta) {
+      yield delta
     }
   }
 }

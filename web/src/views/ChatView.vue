@@ -13,8 +13,8 @@
         @delete="handleDeleteConversation"
       />
       <div class="chat-layout__sidebar-actions">
-        <el-button plain @click="router.push('/memories')">管理记忆</el-button>
-        <el-button type="danger" @click="handleLogout">退出登录</el-button>
+        <!-- <el-button plain @click="router.push('/memories')">管理记忆</el-button> -->
+        <el-button @click="handleLogout">退出登录</el-button>
       </div>
     </aside>
 
@@ -78,7 +78,7 @@ watch(
     if (typeof conversationId === 'string' && conversationId !== chatStore.activeConversationId) {
       await chatStore.selectConversation(conversationId)
       await nextTick()
-      scrollToBottom()
+      scrollToBottom(false)
     }
   }
 )
@@ -87,7 +87,7 @@ watch(
   () => chatStore.messages,
   () => {
     nextTick(() => {
-      scrollToBottom()
+      scrollToBottom(false)
     })
   },
   {

@@ -29,6 +29,15 @@ const MAX_TOOL_CALL_ROUNDS = 5
 const toolsByName = new Map(tools.map((tool) => [tool.name, tool]))
 let chatModelPromise: Promise<ChatModelWithTools> | null = null
 
+function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Symbol.asyncIterator in value &&
+    typeof value[Symbol.asyncIterator] === 'function'
+  )
+}
+
 async function getChatModel(): Promise<ChatModelWithTools> {
   if (!env.LLM_API_KEY) {
     throw new AppError(500, '阿里云百炼 API 未配置', 'MODEL_CONFIG_MISSING')
@@ -60,6 +69,9 @@ function buildLangChainMessages({
   const systemPrompt = [
     '你是一个中文优先的 AI 助手。',
     '回答要直接、清晰、尽量有可执行性。',
+    '工具使用规则：',
+    '1. 只要用户询问实时新闻、最新动态、今天/最近发生了什么、当前价格、近期赛事结果等强时效性信息，必须先调用 webSearchTool。',
+    '2. 工具返回后，要基于工具结果继续回答，不要忽略工具输出。',
     memoryContext.length > 0 ? `以下是当前用户的长期记忆：\n${memoryContext.join('\n')}` : ''
   ]
     .filter(Boolean)
@@ -107,7 +119,17 @@ function normalizeContent(content: unknown): string {
   return ''
 }
 
-function stringifyToolResult(result: unknown): string {
+async function stringifyToolResult(result: unknown): Promise<string> {
+  if (isAsyncIterable(result)) {
+    let aggregated = ''
+
+    for await (const chunk of result) {
+      aggregated += normalizeContent(chunk)
+    }
+
+    return aggregated.trim()
+  }
+
   if (typeof result === 'string') {
     return result
   }
@@ -138,10 +160,11 @@ async function executeToolCalls(toolCalls: AIMessage['tool_calls']): Promise<Too
 
       try {
         const result = await currentTool.invoke(toolCall.args ?? {})
+        const content = await stringifyToolResult(result)
 
         return new ToolMessage({
           tool_call_id: toolCall.id,
-          content: stringifyToolResult(result),
+          content,
           status: 'success'
         })
       } catch (error) {
