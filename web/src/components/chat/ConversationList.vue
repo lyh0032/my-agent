@@ -85,6 +85,7 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
 }
 
 .conversation-item {
+  flex-shrink: 0;
   width: 100%;
   border: 0;
   border-radius: 16px;
@@ -137,5 +138,13 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+@media (hover: none), (max-width: 960px) {
+  .conversation-item-right {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 </style>

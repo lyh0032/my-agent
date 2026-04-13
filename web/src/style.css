@@ -16,15 +16,19 @@ html,
 body,
 #app {
   margin: 0;
-  width: 100vw;
-  height: 100vh;
-  min-width: 1000px;
-  overflow-y: hidden;
-  overflow-x: auto;
+  width: 100%;
+  min-height: 100%;
 }
 
 body {
   min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+#app {
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 a {

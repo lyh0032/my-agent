@@ -45,10 +45,8 @@ function handleSubmit() {
   .el-textarea {
     flex: 1;
     height: 100%;
-    ::v-deep {
-      .el-textarea__inner {
-        height: 100%;
-      }
+    :deep(.el-textarea__inner) {
+      height: 100%;
     }
   }
 

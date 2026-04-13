@@ -141,5 +141,26 @@ async function handleDelete(memoryId: string) {
   border: 1px solid rgba(18, 52, 88, 0.08);
   border-radius: 24px;
   padding: 16px;
+  overflow-x: auto;
+}
+
+@media (max-width: 768px) {
+  .memory-page {
+    padding: 20px 16px;
+    gap: 16px;
+  }
+
+  .memory-page__actions {
+    width: 100%;
+  }
+
+  .memory-page__actions .el-button {
+    flex: 1;
+  }
+
+  .memory-page__content {
+    padding: 12px;
+    border-radius: 18px;
+  }
 }
 </style>

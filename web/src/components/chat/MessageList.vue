@@ -145,6 +145,7 @@ function scrollToBottom(element: HTMLElement, isSmooth = true) {
 
 .message-bubble {
   max-width: 760px;
+  max-width: 100%;
   padding: 16px 18px;
   border-radius: 20px;
   background: #d3e5ff;

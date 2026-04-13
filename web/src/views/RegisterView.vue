@@ -96,4 +96,14 @@ async function handleSubmit() {
   margin-top: 20px;
   color: #5f6774;
 }
+
+@media (max-width: 640px) {
+  .auth-page {
+    padding: 16px;
+  }
+
+  .auth-card {
+    border-radius: 22px;
+  }
+}
 </style>

@@ -1,9 +1,29 @@
 <template>
   <div class="chat-layout">
-    <aside class="chat-layout__sidebar">
+    <button
+      v-if="isMobile && isSidebarOpen"
+      class="chat-layout__backdrop"
+      type="button"
+      aria-label="关闭侧边菜单"
+      @click="closeSidebar"
+    ></button>
+
+    <aside class="chat-layout__sidebar" :class="{ 'chat-layout__sidebar--open': isSidebarOpen }">
       <div class="chat-layout__brand">
-        <span class="chat-layout__eyebrow">Workspace</span>
-        <h1>My Agent</h1>
+        <div>
+          <span class="chat-layout__eyebrow">Workspace</span>
+          <h1>My Agent</h1>
+        </div>
+        <button
+          v-if="isMobile"
+          class="chat-layout__icon-button"
+          type="button"
+          aria-label="关闭侧边菜单"
+          @click="closeSidebar"
+        >
+          <span></span>
+          <span></span>
+        </button>
       </div>
       <ConversationList
         :conversations="chatStore.conversations"
@@ -20,9 +40,22 @@
 
     <main class="chat-layout__main">
       <header class="chat-layout__header">
-        <div>
-          <span class="chat-layout__eyebrow">Active Conversation</span>
-          <h2>{{ chatStore.activeConversation?.title || '未选择会话' }}</h2>
+        <div class="chat-layout__header-main">
+          <button
+            v-if="isMobile"
+            class="chat-layout__icon-button"
+            type="button"
+            aria-label="打开侧边菜单"
+            @click="openSidebar"
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+          <div>
+            <span class="chat-layout__eyebrow">Active Conversation</span>
+            <h2>{{ chatStore.activeConversation?.title || '未选择会话' }}</h2>
+          </div>
         </div>
         <span class="chat-layout__user">{{ authStore.user?.username }}</span>
       </header>
@@ -39,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, watch, ref, nextTick } from 'vue'
+import { onBeforeUnmount, onMounted, watch, ref, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ConversationList from '../components/chat/ConversationList.vue'
@@ -54,8 +87,15 @@ const router = useRouter()
 const route = useRoute()
 
 const msgRef = ref<InstanceType<typeof MessageList>>()
+const isMobile = ref(false)
+const isSidebarOpen = ref(false)
+
+const MOBILE_BREAKPOINT = 960
 
 onMounted(async () => {
+  syncViewport()
+  window.addEventListener('resize', syncViewport)
+
   await chatStore.loadConversations()
 
   const conversationId = route.query.conversationId
@@ -70,6 +110,10 @@ onMounted(async () => {
     })
     await chatStore.selectConversation(chatStore.activeConversationId)
   }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', syncViewport)
 })
 
 watch(
@@ -99,6 +143,22 @@ function scrollToBottom(animated = true) {
   msgRef.value?.scrollToBottom(animated)
 }
 
+function syncViewport() {
+  const mobile = window.innerWidth <= MOBILE_BREAKPOINT
+  isMobile.value = mobile
+  isSidebarOpen.value = !mobile
+}
+
+function openSidebar() {
+  isSidebarOpen.value = true
+}
+
+function closeSidebar() {
+  if (isMobile.value) {
+    isSidebarOpen.value = false
+  }
+}
+
 async function handleCreateConversation() {
   const conversation = await chatStore.createConversation()
   await router.push({
@@ -107,6 +167,7 @@ async function handleCreateConversation() {
       conversationId: conversation.id
     }
   })
+  closeSidebar()
 }
 
 async function handleSelectConversation(conversationId: string) {
@@ -116,6 +177,7 @@ async function handleSelectConversation(conversationId: string) {
       conversationId
     }
   })
+  closeSidebar()
 }
 
 async function handleDeleteConversation(conversationId: string) {
@@ -132,6 +194,8 @@ async function handleDeleteConversation(conversationId: string) {
       query: void 0
     })
   }
+
+  closeSidebar()
 }
 
 async function handleSendMessage(content: string) {
@@ -154,8 +218,11 @@ async function handleLogout() {
 .chat-layout {
   width: 100%;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   display: flex;
+  position: relative;
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .chat-layout__sidebar {
@@ -167,9 +234,16 @@ async function handleLogout() {
   display: flex;
   flex-shrink: 0;
   flex-direction: column;
+  position: relative;
+  z-index: 3;
 }
+
 .chat-layout__brand {
   padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .chat-layout__brand h1,
@@ -204,6 +278,7 @@ async function handleLogout() {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .chat-layout__header {
@@ -215,11 +290,29 @@ async function handleLogout() {
   border-bottom: 1px solid rgba(18, 52, 88, 0.2);
 }
 
+.chat-layout__header-main {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.chat-layout__header-main > div {
+  min-width: 0;
+}
+
+.chat-layout__header h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chat-layout__user {
   padding: 10px 14px;
   border-radius: 999px;
   background: rgba(18, 52, 88, 0.08);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .chat-layout__messages {
@@ -234,14 +327,97 @@ async function handleLogout() {
   border-top: 1px solid rgba(18, 52, 88, 0.2);
 }
 
+.chat-layout__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgba(8, 15, 24, 0.38);
+  z-index: 2;
+}
+
+.chat-layout__icon-button {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(18, 52, 88, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #123458;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.chat-layout__icon-button span {
+  width: 16px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
 @media (max-width: 960px) {
   .chat-layout {
-    grid-template-columns: 1fr;
+    display: block;
+  }
+
+  .chat-layout__main {
+    width: 100%;
+    height: 100%;
   }
 
   .chat-layout__sidebar {
-    border-right: 0;
-    border-bottom: 1px solid rgba(18, 52, 88, 0.08);
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: min(84vw, 320px);
+    max-width: 320px;
+    border-right: 1px solid rgba(18, 52, 88, 0.08);
+    box-shadow: 0 18px 50px rgba(18, 52, 88, 0.24);
+    transform: translateX(-100%);
+    transition: transform 0.24s ease;
+  }
+
+  .chat-layout__sidebar--open {
+    transform: translateX(0);
+  }
+
+  .chat-layout__header {
+    align-items: center;
+    padding: 12px 16px;
+  }
+
+  .chat-layout__user {
+    max-width: 42%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chat-layout__messages {
+    min-height: 0;
+  }
+
+  .chat-layout__composer {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .chat-layout__header {
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .chat-layout__header h2 {
+    font-size: 18px;
+    white-space: normal;
+  }
+
+  .chat-layout__user {
+    padding: 8px 12px;
+    font-size: 13px;
   }
 }
 </style>
