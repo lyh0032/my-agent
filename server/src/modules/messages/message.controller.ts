@@ -27,6 +27,9 @@ export async function streamMessageController(req: Request<MessageParams>, res: 
       onUserMessage(payload) {
         writeSseEvent(res, 'user-message', payload)
       },
+      onAssistantStatus(payload) {
+        writeSseEvent(res, 'assistant-status', payload)
+      },
       onAssistantDelta(delta) {
         writeSseEvent(res, 'assistant-delta', { delta })
       },

@@ -18,6 +18,7 @@ export const useChatStore = defineStore('chat', () => {
   const isLoadingConversations = ref(false)
   const isLoadingMessages = ref(false)
   const isSending = ref(false)
+  const streamingStatusText = ref('')
 
   const activeConversation = computed(
     () =>
@@ -63,6 +64,7 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     isSending.value = true
+    streamingStatusText.value = '正在思考问题...'
     const conversationId = activeConversationId.value
     const streamingAssistantId = `assistant-stream-${Date.now()}`
     let hasStreamingAssistant = false
@@ -75,7 +77,11 @@ export const useChatStore = defineStore('chat', () => {
           onUserMessage(userMessage) {
             messages.value = [...messages.value, userMessage]
           },
+          onAssistantStatus(status) {
+            streamingStatusText.value = status.text
+          },
           onAssistantDelta(delta) {
+            streamingStatusText.value = ''
             if (!hasStreamingAssistant) {
               hasStreamingAssistant = true
               messages.value = [
@@ -98,6 +104,7 @@ export const useChatStore = defineStore('chat', () => {
             )
           },
           onAssistantDone(payload) {
+            streamingStatusText.value = ''
             messages.value = hasStreamingAssistant
               ? messages.value.map((message) =>
                   message.id === streamingAssistantId ? payload.assistantMessage : message
@@ -111,6 +118,7 @@ export const useChatStore = defineStore('chat', () => {
       activeConversationId.value = result.conversationId
       return result
     } catch (error) {
+      streamingStatusText.value = ''
       if (hasStreamingAssistant) {
         messages.value = messages.value.map((message) =>
           message.id === streamingAssistantId
@@ -125,6 +133,7 @@ export const useChatStore = defineStore('chat', () => {
       throw error
     } finally {
       isSending.value = false
+      streamingStatusText.value = ''
     }
   }
 
@@ -161,6 +170,7 @@ export const useChatStore = defineStore('chat', () => {
     isLoadingConversations,
     isLoadingMessages,
     isSending,
+    streamingStatusText,
     loadConversations,
     createConversation: createConversationAction,
     selectConversation,

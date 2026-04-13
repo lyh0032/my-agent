@@ -38,7 +38,9 @@
           <span class="message-bubble__time">思考中...</span>
         </span>
         <div class="message-bubble__thinking">
-          <span class="message-bubble__thinking-text">正在整理回答</span>
+          <span class="message-bubble__thinking-text">{{
+            props.thinkingText || '正在整理回答'
+          }}</span>
           <span class="message-bubble__thinking-dots" aria-hidden="true">
             <i></i>
             <i></i>
@@ -61,6 +63,7 @@ const listRef = ref<HTMLDivElement>()
 const props = defineProps<{
   messages: Message[]
   streaming?: boolean
+  thinkingText?: string
 }>()
 
 defineExpose({

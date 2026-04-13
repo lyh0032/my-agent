@@ -4,13 +4,15 @@ import type {
   ConversationSummary,
   CreateConversationInput,
   CreateMessageInput,
-  Message
+  Message,
+  StreamAssistantStatus
 } from '../types/chat'
 import { clearStoredToken, getStoredToken } from '../utils/token'
 import { apiBaseUrl, http } from './http'
 
 type StreamMessageHandlers = {
   onUserMessage?: (message: Message) => void
+  onAssistantStatus?: (status: StreamAssistantStatus) => void
   onAssistantDelta?: (delta: string) => void
   onAssistantDone?: (payload: { assistantMessage: Message; conversationId: string }) => void
 }
@@ -185,6 +187,10 @@ export async function streamMessage(
 
       if (parsed.event === 'user-message' && parsed.data) {
         handlers.onUserMessage?.(parsed.data as Message)
+      }
+
+      if (parsed.event === 'assistant-status' && parsed.data) {
+        handlers.onAssistantStatus?.(parsed.data as StreamAssistantStatus)
       }
 
       if (parsed.event === 'assistant-delta' && parsed.data) {

@@ -32,3 +32,8 @@ export type CreateConversationInput = {
 export type CreateMessageInput = {
   content: string
 }
+
+export type StreamAssistantStatus = {
+  stage: 'thinking' | 'tool' | 'reasoning'
+  text: string
+}

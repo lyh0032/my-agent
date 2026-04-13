@@ -2,6 +2,7 @@ import { tool, type StructuredToolInterface } from '@langchain/core/tools'
 import { z } from 'zod'
 import { MyMcpClient, extractMcpToolText } from './mcp'
 import { env } from '../../config/env'
+import dayjs from 'dayjs'
 
 export const toolType = {
   webSearchTool: 'webSearchTool'
@@ -19,10 +20,16 @@ export const webSearchTool = tool(
       'https://dashscope.aliyuncs.com/api/v1/mcps/WebSearch/mcp',
       env.DASHSCOPE_API_KEY!
     )
+    console.log('联网工具开始', dayjs().format('HH:mm:ss'))
+
     await client.connect()
 
     const res = await client.callTool('bailian_web_search', { query })
-    return extractMcpToolText(res)
+
+    const r = extractMcpToolText(res)
+    console.log('联网工具结束', r, dayjs().format('HH:mm:ss'))
+
+    return r
   },
   {
     name: toolType.webSearchTool,

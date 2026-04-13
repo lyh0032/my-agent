@@ -114,6 +114,7 @@ export async function streamMessage(
       createdAt: Date
     }) => void
     onAssistantDelta: (delta: string) => void
+    onAssistantStatus: (payload: { stage: 'thinking' | 'tool' | 'reasoning'; text: string }) => void
     onAssistantDone: (payload: {
       assistantMessage: {
         id: string
@@ -149,7 +150,10 @@ export async function streamMessage(
         role: message.role,
         content: message.content
       })),
-    memoryContext
+    memoryContext,
+    onStatusChange(payload) {
+      handlers.onAssistantStatus(payload)
+    }
   })
 
   for await (const delta of stream) {

@@ -130,11 +130,14 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
 
 .conversation-item__title {
   font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .conversation-item__preview {
   color: #5f6774;
-  font-size: 13px;
+  font-size: 12px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;

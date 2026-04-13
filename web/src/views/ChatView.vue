@@ -61,7 +61,12 @@
       </header>
 
       <section class="chat-layout__messages" :key="route.query.conversationId as string">
-        <MessageList ref="msgRef" :messages="chatStore.messages" :streaming="chatStore.isSending" />
+        <MessageList
+          ref="msgRef"
+          :messages="chatStore.messages"
+          :streaming="chatStore.isSending"
+          :thinking-text="chatStore.streamingStatusText"
+        />
       </section>
 
       <footer class="chat-layout__composer">
