@@ -26,6 +26,11 @@ type GenerateAssistantReplyParams = {
   modelOverride?: string
 }
 
+type GenerateConversationTitleParams = {
+  userMessage: string
+  modelOverride?: string
+}
+
 type ChatModelWithTools = ReturnType<ChatOpenAI['bindTools']>
 type ToolCallLike = NonNullable<AIMessage['tool_calls']>[number]
 
@@ -42,22 +47,39 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
 }
 
 async function getChatModel(modelOverride?: string): Promise<ChatModelWithTools> {
+  const baseModel = getBaseChatModel(modelOverride)
+
+  return baseModel.bindTools(tools, {
+    parallel_tool_calls: false,
+    strict: true
+  })
+}
+
+function getBaseChatModel(modelOverride?: string): ChatOpenAI {
   if (!env.LLM_API_KEY) {
     throw new AppError(500, '阿里云百炼 API 未配置', 'MODEL_CONFIG_MISSING')
   }
 
   const modelName = modelOverride || env.LLM_MODEL
 
-  const baseModel = new ChatOpenAI({
+  return new ChatOpenAI({
     apiKey: env.LLM_API_KEY,
     model: modelName,
     configuration: env.LLM_BASE_URL ? { baseURL: env.LLM_BASE_URL } : undefined
   })
+}
 
-  return baseModel.bindTools(tools, {
-    parallel_tool_calls: false,
-    strict: true
-  })
+function sanitizeConversationTitle(title: string, fallback: string): string {
+  const normalized = title
+    .replace(/^标题\s*[:：]\s*/u, '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/[“”"'《》【】]/g, '')
+    .trim()
+
+  const firstLine = normalized.split(/[。！？.!?]/u)[0]?.trim() ?? ''
+  const finalTitle = (firstLine || normalized || fallback).slice(0, 120).trim()
+
+  return finalTitle || fallback.slice(0, 120).trim() || '新会话'
 }
 
 function buildLangChainMessages({
@@ -595,4 +617,29 @@ export async function generateAssistantReply(
   }
 
   return fullText
+}
+
+export async function generateConversationTitle({
+  userMessage,
+  modelOverride
+}: GenerateConversationTitleParams): Promise<string> {
+  const fallbackTitle = userMessage.trim().slice(0, 40) || '新会话'
+  const model = getBaseChatModel(modelOverride)
+  const result = await model.invoke([
+    new SystemMessage(
+      [
+        '你是一个对话标题生成助手。',
+        '请根据用户发来的第一条消息，生成一个简洁准确的中文会话标题。',
+        '要求：',
+        '1. 只输出标题本身，不要解释，不要加引号，不要加标题前缀。',
+        '2. 标题尽量控制在 12 个字以内，最多不超过 20 个字。',
+        '3. 突出用户核心意图，避免空泛词语。'
+      ].join('\n')
+    ),
+    new HumanMessage(userMessage)
+  ])
+
+  const content = normalizeContent(result.content)
+
+  return sanitizeConversationTitle(content, fallbackTitle)
 }

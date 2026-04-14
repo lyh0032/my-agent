@@ -1,6 +1,13 @@
 import { prisma } from '../../lib/prisma'
-import { generateAssistantReply, streamAssistantReply } from '../../lib/ai'
-import { ensureConversationOwnership } from '../conversations/conversation.service'
+import {
+  generateAssistantReply,
+  generateConversationTitle,
+  streamAssistantReply
+} from '../../lib/ai'
+import {
+  ensureConversationOwnership,
+  updateConversation
+} from '../conversations/conversation.service'
 import { getModelNameForLLM } from '../model-preferences/model-preference.service'
 import type { CreateMessageBody } from './message.schema'
 
@@ -32,17 +39,47 @@ async function loadMessageGenerationContext(userId: string, conversationId: stri
   } satisfies MessageGenerationContext
 }
 
-async function updateConversationMetadata(conversationId: string, firstUserInput?: string) {
-  const messageCount = await prisma.message.count({
-    where: { conversationId }
-  })
+async function updateConversationMetadata(
+  userId: string,
+  conversationId: string,
+  options?: {
+    firstUserInput?: string
+    shouldGenerateTitle?: boolean
+    modelOverride?: string
+  }
+) {
+  if (options?.shouldGenerateTitle && options.firstUserInput?.trim()) {
+    const generatedTitle = await generateConversationTitle({
+      userMessage: options.firstUserInput,
+      modelOverride: options.modelOverride
+    })
+
+    await updateConversation(userId, conversationId, {
+      title: generatedTitle
+    })
+
+    return
+  }
 
   await prisma.conversation.update({
     where: { id: conversationId },
     data: {
-      title: messageCount <= 2 && firstUserInput ? firstUserInput.slice(0, 40) : undefined,
       updatedAt: new Date()
     }
+  })
+}
+
+function scheduleConversationMetadataUpdate(
+  userId: string,
+  conversationId: string,
+  options?: {
+    firstUserInput?: string
+    shouldGenerateTitle?: boolean
+    modelOverride?: string
+  }
+) {
+  return updateConversationMetadata(userId, conversationId, options).catch((error) => {
+    console.error('Failed to update conversation metadata:', error)
   })
 }
 
@@ -64,6 +101,11 @@ export async function createMessage(
 ) {
   await ensureConversationOwnership(userId, conversationId)
 
+  const existingMessageCount = await prisma.message.count({
+    where: { conversationId }
+  })
+  const shouldGenerateTitle = existingMessageCount === 0
+
   const userMessage = await prisma.message.create({
     data: {
       conversationId,
@@ -74,6 +116,11 @@ export async function createMessage(
 
   const { history, memoryContext } = await loadMessageGenerationContext(userId, conversationId)
   const preferredModel = await getModelNameForLLM(userId)
+  const conversationMetadataTask = scheduleConversationMetadataUpdate(userId, conversationId, {
+    firstUserInput: data.content,
+    shouldGenerateTitle,
+    modelOverride: preferredModel
+  })
 
   const assistantContent = await generateAssistantReply({
     latestUserMessage: data.content,
@@ -95,7 +142,7 @@ export async function createMessage(
     }
   })
 
-  await updateConversationMetadata(conversationId, data.content)
+  await conversationMetadataTask
 
   return {
     conversationId,
@@ -132,6 +179,11 @@ export async function streamMessage(
 ) {
   await ensureConversationOwnership(userId, conversationId)
 
+  const existingMessageCount = await prisma.message.count({
+    where: { conversationId }
+  })
+  const shouldGenerateTitle = existingMessageCount === 0
+
   const userMessage = await prisma.message.create({
     data: {
       conversationId,
@@ -144,6 +196,11 @@ export async function streamMessage(
 
   const { history, memoryContext } = await loadMessageGenerationContext(userId, conversationId)
   const preferredModel = await getModelNameForLLM(userId)
+  const conversationMetadataTask = scheduleConversationMetadataUpdate(userId, conversationId, {
+    firstUserInput: data.content,
+    shouldGenerateTitle,
+    modelOverride: preferredModel
+  })
 
   let assistantContent = ''
   const stream = streamAssistantReply({
@@ -174,7 +231,7 @@ export async function streamMessage(
     }
   })
 
-  await updateConversationMetadata(conversationId, data.content)
+  await conversationMetadataTask
 
   handlers.onAssistantDone({
     assistantMessage,

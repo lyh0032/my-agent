@@ -2,13 +2,9 @@ import { prisma } from '../../lib/prisma'
 import { AppError } from '../../utils/app-error'
 import type { CreateConversationBody, UpdateConversationBody } from './conversation.schema'
 
-function buildConversationTitle(input?: string, title?: string): string {
+function buildConversationTitle(title?: string): string {
   if (title?.trim()) {
     return title.trim().slice(0, 120)
-  }
-
-  if (input?.trim()) {
-    return input.trim().slice(0, 40)
   }
 
   return '新会话'
@@ -44,7 +40,7 @@ export async function createConversation(userId: string, data: CreateConversatio
   return prisma.conversation.create({
     data: {
       userId,
-      title: buildConversationTitle(data.initialMessage, data.title)
+      title: buildConversationTitle(data.title)
     },
     select: {
       id: true,
