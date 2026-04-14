@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma'
 import { generateAssistantReply, streamAssistantReply } from '../../lib/ai'
 import { ensureConversationOwnership } from '../conversations/conversation.service'
+import { getModelNameForLLM } from '../model-preferences/model-preference.service'
 import type { CreateMessageBody } from './message.schema'
 
 type MessageGenerationContext = {
@@ -72,6 +73,7 @@ export async function createMessage(
   })
 
   const { history, memoryContext } = await loadMessageGenerationContext(userId, conversationId)
+  const preferredModel = await getModelNameForLLM(userId)
 
   const assistantContent = await generateAssistantReply({
     latestUserMessage: data.content,
@@ -81,7 +83,8 @@ export async function createMessage(
         role: message.role,
         content: message.content
       })),
-    memoryContext
+    memoryContext,
+    modelOverride: preferredModel
   })
 
   const assistantMessage = await prisma.message.create({
@@ -140,6 +143,7 @@ export async function streamMessage(
   handlers.onUserMessage(userMessage)
 
   const { history, memoryContext } = await loadMessageGenerationContext(userId, conversationId)
+  const preferredModel = await getModelNameForLLM(userId)
 
   let assistantContent = ''
   const stream = streamAssistantReply({
@@ -151,6 +155,7 @@ export async function streamMessage(
         content: message.content
       })),
     memoryContext,
+    modelOverride: preferredModel,
     onStatusChange(payload) {
       handlers.onAssistantStatus(payload)
     }

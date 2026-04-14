@@ -32,6 +32,25 @@
         @select="handleSelectConversation"
         @delete="handleDeleteConversation"
       />
+      <div class="chat-layout__model-selector">
+        <el-select
+          v-model="selectedModelId"
+          placeholder="选择模型"
+          size="default"
+          :loading="isLoadingModels"
+          @change="handleModelChange"
+        >
+          <el-option
+            v-for="model in availableModels"
+            :key="model.id"
+            :label="model.name"
+            :value="model.id"
+          >
+            <span>{{ model.name }}</span>
+            <span class="chat-layout__model-desc">{{ model.description }}</span>
+          </el-option>
+        </el-select>
+      </div>
       <div class="chat-layout__sidebar-actions">
         <!-- <el-button plain @click="router.push('/memories')">管理记忆</el-button> -->
         <el-button @click="handleLogout">退出登录</el-button>
@@ -79,12 +98,19 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, watch, ref, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 
 import ConversationList from '../components/chat/ConversationList.vue'
 import MessageComposer from '../components/chat/MessageComposer.vue'
 import MessageList from '../components/chat/MessageList.vue'
 import { useAuthStore } from '../stores/auth'
 import { useChatStore } from '../stores/chat'
+import type { ModelInfo } from '../types/chat'
+import {
+  fetchAvailableModels,
+  fetchPreferredModel,
+  updatePreferredModel
+} from '../api/model-preference'
 
 const authStore = useAuthStore()
 const chatStore = useChatStore()
@@ -94,6 +120,9 @@ const route = useRoute()
 const msgRef = ref<InstanceType<typeof MessageList>>()
 const isMobile = ref(false)
 const isSidebarOpen = ref(false)
+const availableModels = ref<ModelInfo[]>([])
+const selectedModelId = ref('')
+const isLoadingModels = ref(false)
 
 const MOBILE_BREAKPOINT = 960
 
@@ -102,6 +131,7 @@ onMounted(async () => {
   window.addEventListener('resize', syncViewport)
 
   await chatStore.loadConversations()
+  await loadModelPreferences()
 
   const conversationId = route.query.conversationId
   if (typeof conversationId === 'string') {
@@ -213,6 +243,29 @@ async function handleSendMessage(content: string) {
   }
 }
 
+async function loadModelPreferences() {
+  isLoadingModels.value = true
+  try {
+    const [models, preferred] = await Promise.all([fetchAvailableModels(), fetchPreferredModel()])
+
+    availableModels.value = models
+    selectedModelId.value = preferred.id
+  } catch (error) {
+    console.error('Failed to load model preferences:', error)
+  } finally {
+    isLoadingModels.value = false
+  }
+}
+
+async function handleModelChange(modelId: string) {
+  try {
+    await updatePreferredModel({ modelId })
+    ElMessage.success('模型已切换')
+  } catch (error) {
+    ElMessage.error('切换模型失败')
+  }
+}
+
 async function handleLogout() {
   authStore.logout()
   await router.push('/login')
@@ -275,6 +328,19 @@ async function handleLogout() {
     width: 100%;
     margin: 0px;
   }
+}
+
+.chat-layout__model-selector {
+  padding: 0 16px 16px;
+  .el-select {
+    width: 100%;
+  }
+}
+
+.chat-layout__model-desc {
+  margin-left: 8px;
+  color: #999;
+  font-size: 12px;
 }
 
 .chat-layout__main {

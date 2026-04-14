@@ -37,3 +37,15 @@ export type StreamAssistantStatus = {
   stage: 'thinking' | 'tool' | 'reasoning'
   text: string
 }
+
+export type ModelInfo = {
+  id: string
+  name: string
+  description: string
+}
+
+
+
+export type UpdateModelPreferenceInput = {
+  modelId: string
+}

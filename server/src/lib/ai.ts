@@ -23,6 +23,7 @@ type GenerateAssistantReplyParams = {
   memoryContext: string[]
   conversationHistory: ConversationMessage[]
   onStatusChange?: (payload: { stage: 'thinking' | 'tool' | 'reasoning'; text: string }) => void
+  modelOverride?: string
 }
 
 type ChatModelWithTools = ReturnType<ChatOpenAI['bindTools']>
@@ -30,7 +31,6 @@ type ToolCallLike = NonNullable<AIMessage['tool_calls']>[number]
 
 const MAX_TOOL_CALL_ROUNDS = 5
 const toolsByName = new Map(tools.map((tool) => [tool.name, tool]))
-let chatModelPromise: Promise<ChatModelWithTools> | null = null
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
   return (
@@ -41,30 +41,23 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
   )
 }
 
-async function getChatModel(): Promise<ChatModelWithTools> {
+async function getChatModel(modelOverride?: string): Promise<ChatModelWithTools> {
   if (!env.LLM_API_KEY) {
     throw new AppError(500, '阿里云百炼 API 未配置', 'MODEL_CONFIG_MISSING')
   }
 
-  if (!chatModelPromise) {
-    chatModelPromise = (async () => {
-      const baseModel = new ChatOpenAI({
-        apiKey: env.LLM_API_KEY,
-        model: env.LLM_MODEL,
-        configuration: env.LLM_BASE_URL ? { baseURL: env.LLM_BASE_URL } : undefined
-      })
+  const modelName = modelOverride || env.LLM_MODEL
 
-      return baseModel.bindTools(tools, {
-        parallel_tool_calls: false,
-        strict: true
-      })
-    })().catch((error) => {
-      chatModelPromise = null
-      throw error
-    })
-  }
+  const baseModel = new ChatOpenAI({
+    apiKey: env.LLM_API_KEY,
+    model: modelName,
+    configuration: env.LLM_BASE_URL ? { baseURL: env.LLM_BASE_URL } : undefined
+  })
 
-  return chatModelPromise
+  return baseModel.bindTools(tools, {
+    parallel_tool_calls: false,
+    strict: true
+  })
 }
 
 function buildLangChainMessages({
@@ -519,9 +512,10 @@ export async function* streamAssistantReply({
   latestUserMessage,
   memoryContext,
   conversationHistory,
-  onStatusChange
+  onStatusChange,
+  modelOverride
 }: GenerateAssistantReplyParams): AsyncGenerator<string, string, void> {
-  const model = await getChatModel()
+  const model = await getChatModel(modelOverride)
   const messages = buildLangChainMessages({
     latestUserMessage,
     memoryContext,
