@@ -7,6 +7,7 @@ import {
   type BaseMessage
 } from '@langchain/core/messages'
 import { ChatOpenAI } from '@langchain/openai'
+import { z } from 'zod'
 
 import { env } from '../config/env'
 import { AppError } from '../utils/app-error'
@@ -31,11 +32,35 @@ type GenerateConversationTitleParams = {
   modelOverride?: string
 }
 
+export type ExtractedMemory = {
+  type: 'profile' | 'preference' | 'summary' | 'fact'
+  key: string
+  content: string
+}
+
+type GenerateMemoryCandidatesParams = {
+  userMessage: string
+  existingMemories: ExtractedMemory[]
+  modelOverride?: string
+}
+
 type ChatModelWithTools = ReturnType<ChatOpenAI['bindTools']>
 type ToolCallLike = NonNullable<AIMessage['tool_calls']>[number]
 
 const MAX_TOOL_CALL_ROUNDS = 5
 const toolsByName = new Map(tools.map((tool) => [tool.name, tool]))
+const extractedMemorySchema = z.object({
+  shouldRemember: z.boolean(),
+  memories: z
+    .array(
+      z.object({
+        type: z.enum(['profile', 'preference', 'summary', 'fact']),
+        key: z.string().trim().min(1).max(80),
+        content: z.string().trim().min(1).max(2000)
+      })
+    )
+    .max(3)
+})
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
   return (
@@ -95,7 +120,9 @@ function buildLangChainMessages({
     '2. 工具返回后，要基于工具结果继续回答，不要忽略工具输出。',
     '3. webSearchTool 返回的是检索原始结果，你需要自行提炼时间、事实、结论并组织成最终回答，不要把工具输出原样当成最终答案。',
     '4. 调用工具时必须提供完整且有效的参数。调用 webSearchTool 时，query 必须是非空字符串，不能传空对象。',
-    memoryContext.length > 0 ? `以下是当前用户的长期记忆：\n${memoryContext.join('\n')}` : ''
+    memoryContext.length > 0
+      ? `以下是当前用户的长期记忆，仅在和当前问题相关时自然使用，不要逐条复述：\n${memoryContext.join('\n')}`
+      : ''
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -140,6 +167,47 @@ function normalizeContent(content: unknown): string {
   }
 
   return ''
+}
+
+function extractJsonText(content: string): string | null {
+  const fencedMatch = content.match(/```json\s*([\s\S]*?)\s*```/i)
+
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1].trim()
+  }
+
+  const firstBraceIndex = content.indexOf('{')
+  const lastBraceIndex = content.lastIndexOf('}')
+
+  if (firstBraceIndex >= 0 && lastBraceIndex > firstBraceIndex) {
+    return content.slice(firstBraceIndex, lastBraceIndex + 1).trim()
+  }
+
+  return null
+}
+
+function sanitizeMemoryKey(
+  key: string,
+  fallbackPrefix: ExtractedMemory['type'],
+  index: number
+): string {
+  const normalized = key
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^\p{L}\p{N}_-]/gu, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 80)
+
+  return normalized || `${fallbackPrefix}_memory_${index + 1}`
+}
+
+function sanitizeMemoryContent(content: string): string {
+  return content
+    .replace(/[\r\n]+/g, ' ')
+    .trim()
+    .slice(0, 2000)
 }
 
 async function stringifyToolResult(result: unknown): Promise<string> {
@@ -642,4 +710,59 @@ export async function generateConversationTitle({
   const content = normalizeContent(result.content)
 
   return sanitizeConversationTitle(content, fallbackTitle)
+}
+
+export async function generateMemoryCandidates({
+  userMessage,
+  existingMemories,
+  modelOverride
+}: GenerateMemoryCandidatesParams): Promise<ExtractedMemory[]> {
+  const model = getBaseChatModel(modelOverride)
+  const existingMemoryText = existingMemories.length
+    ? existingMemories
+        .map((memory) => `- [${memory.type}] ${memory.key}: ${memory.content}`)
+        .join('\n')
+    : '无'
+
+  const result = await model.invoke([
+    new SystemMessage(
+      [
+        '你是一个长期记忆提取助手，负责从用户消息中提取值得长期保存的信息。',
+        '你的任务是只保留未来多轮对话仍然有帮助、且相对稳定的重要用户信息。',
+        '适合记忆的内容包括：用户偏好、常用语言、技术栈、项目背景、居住地、身高、职业、长期目标、稳定事实。',
+        '不要记忆以下内容：一次性任务、临时计划、强时效信息、情绪发泄、没有复用价值的碎片信息、密码/密钥/身份证号/银行卡等敏感信息。',
+        '如果用户表达的是对旧信息的修正，应复用同一个 key 以便覆盖更新。',
+        'key 要简洁稳定，优先使用英文 snake_case，例如 preferred_language、location、height、tech_stack。',
+        '最多输出 3 条记忆。',
+        '输出必须是 JSON 对象，格式为：{"shouldRemember": boolean, "memories": [{"type": "profile|preference|summary|fact", "key": "...", "content": "..."}]}。',
+        '如果没有值得记忆的内容，返回 {"shouldRemember": false, "memories": []}。',
+        `已有长期记忆：\n${existingMemoryText}`
+      ].join('\n')
+    ),
+    new HumanMessage(`请分析这条用户消息是否需要写入长期记忆：\n${userMessage}`)
+  ])
+
+  const content = normalizeContent(result.content)
+  const jsonText = extractJsonText(content)
+
+  if (!jsonText) {
+    return []
+  }
+
+  try {
+    const parsed = extractedMemorySchema.parse(JSON.parse(jsonText))
+
+    if (!parsed.shouldRemember) {
+      return []
+    }
+
+    return parsed.memories.map((memory, index) => ({
+      type: memory.type,
+      key: sanitizeMemoryKey(memory.key, memory.type, index),
+      content: sanitizeMemoryContent(memory.content)
+    }))
+  } catch (error) {
+    console.error('Failed to parse extracted memories:', error)
+    return []
+  }
 }

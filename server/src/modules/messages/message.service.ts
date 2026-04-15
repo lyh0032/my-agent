@@ -2,12 +2,14 @@ import { prisma } from '../../lib/prisma'
 import {
   generateAssistantReply,
   generateConversationTitle,
+  generateMemoryCandidates,
   streamAssistantReply
 } from '../../lib/ai'
 import {
   ensureConversationOwnership,
   updateConversation
 } from '../conversations/conversation.service'
+import { upsertAutoMemories } from '../memories/memory.service'
 import { getModelNameForLLM } from '../model-preferences/model-preference.service'
 import type { CreateMessageBody } from './message.schema'
 
@@ -15,6 +17,11 @@ type MessageGenerationContext = {
   history: Array<{
     id: string
     role: 'user' | 'assistant' | 'system'
+    content: string
+  }>
+  memories: Array<{
+    type: 'profile' | 'preference' | 'summary' | 'fact'
+    key: string
     content: string
   }>
   memoryContext: string[]
@@ -35,6 +42,11 @@ async function loadMessageGenerationContext(userId: string, conversationId: stri
 
   return {
     history,
+    memories: memories.map((memory) => ({
+      type: memory.type,
+      key: memory.key,
+      content: memory.content
+    })),
     memoryContext: memories.map((memory) => `【${memory.type}】${memory.key}: ${memory.content}`)
   } satisfies MessageGenerationContext
 }
@@ -83,6 +95,32 @@ function scheduleConversationMetadataUpdate(
   })
 }
 
+function scheduleUserMemoryExtraction(
+  userId: string,
+  payload: {
+    userMessage: string
+    existingMemories: MessageGenerationContext['memories']
+    modelOverride?: string
+  }
+) {
+  void (async () => {
+    const extractedMemories = await generateMemoryCandidates({
+      userMessage: payload.userMessage,
+      existingMemories: payload.existingMemories,
+      modelOverride: payload.modelOverride
+    })
+
+    if (extractedMemories.length === 0) {
+      return
+    }
+
+    const result = await upsertAutoMemories(userId, extractedMemories)
+    console.log('Auto memories synced:', result)
+  })().catch((error) => {
+    console.error('Failed to extract user memories:', error)
+  })
+}
+
 export async function listMessages(userId: string, conversationId: string) {
   await ensureConversationOwnership(userId, conversationId)
 
@@ -114,7 +152,10 @@ export async function createMessage(
     }
   })
 
-  const { history, memoryContext } = await loadMessageGenerationContext(userId, conversationId)
+  const { history, memories, memoryContext } = await loadMessageGenerationContext(
+    userId,
+    conversationId
+  )
   const preferredModel = await getModelNameForLLM(userId)
   const conversationMetadataTask = scheduleConversationMetadataUpdate(userId, conversationId, {
     firstUserInput: data.content,
@@ -140,6 +181,12 @@ export async function createMessage(
       role: 'assistant',
       content: assistantContent
     }
+  })
+
+  scheduleUserMemoryExtraction(userId, {
+    userMessage: data.content,
+    existingMemories: memories,
+    modelOverride: preferredModel
   })
 
   await conversationMetadataTask
@@ -194,7 +241,10 @@ export async function streamMessage(
 
   handlers.onUserMessage(userMessage)
 
-  const { history, memoryContext } = await loadMessageGenerationContext(userId, conversationId)
+  const { history, memories, memoryContext } = await loadMessageGenerationContext(
+    userId,
+    conversationId
+  )
   const preferredModel = await getModelNameForLLM(userId)
   const conversationMetadataTask = scheduleConversationMetadataUpdate(userId, conversationId, {
     firstUserInput: data.content,
@@ -229,6 +279,12 @@ export async function streamMessage(
       role: 'assistant',
       content: assistantContent
     }
+  })
+
+  scheduleUserMemoryExtraction(userId, {
+    userMessage: data.content,
+    existingMemories: memories,
+    modelOverride: preferredModel
   })
 
   await conversationMetadataTask

@@ -2,6 +2,12 @@ import { prisma } from '../../lib/prisma'
 import { AppError } from '../../utils/app-error'
 import type { CreateMemoryBody, MemoryQuery, UpdateMemoryBody } from './memory.schema'
 
+type AutoMemoryInput = {
+  type: 'profile' | 'preference' | 'summary' | 'fact'
+  key: string
+  content: string
+}
+
 export async function listMemories(userId: string, query: MemoryQuery) {
   const memories = await prisma.memory.findMany({
     where: {
@@ -67,6 +73,64 @@ export async function updateMemory(userId: string, memoryId: string, data: Updat
 export async function deleteMemory(userId: string, memoryId: string) {
   await ensureMemoryOwnership(userId, memoryId)
   await prisma.memory.delete({ where: { id: memoryId } })
+}
+
+export async function upsertAutoMemories(userId: string, memories: AutoMemoryInput[]) {
+  if (memories.length === 0) {
+    return {
+      createdCount: 0,
+      updatedCount: 0,
+      skippedCount: 0
+    }
+  }
+
+  let createdCount = 0
+  let updatedCount = 0
+  let skippedCount = 0
+
+  for (const memory of memories) {
+    const existingMemory = await prisma.memory.findUnique({
+      where: {
+        userId_key: {
+          userId,
+          key: memory.key
+        }
+      }
+    })
+
+    if (!existingMemory) {
+      await prisma.memory.create({
+        data: {
+          userId,
+          type: memory.type,
+          key: memory.key,
+          content: memory.content
+        }
+      })
+      createdCount += 1
+      continue
+    }
+
+    if (existingMemory.type === memory.type && existingMemory.content === memory.content) {
+      skippedCount += 1
+      continue
+    }
+
+    await prisma.memory.update({
+      where: { id: existingMemory.id },
+      data: {
+        type: memory.type,
+        content: memory.content
+      }
+    })
+    updatedCount += 1
+  }
+
+  return {
+    createdCount,
+    updatedCount,
+    skippedCount
+  }
 }
 
 async function ensureMemoryOwnership(userId: string, memoryId: string) {

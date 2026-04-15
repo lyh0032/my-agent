@@ -9,7 +9,12 @@ const app = express()
 
 app.use(
   cors({
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://10.200.166.124:5174'],
+    origin: [
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'http://10.200.166.124:5174',
+      'http://192.168.154.97:5173'
+    ],
     credentials: true
   })
 )

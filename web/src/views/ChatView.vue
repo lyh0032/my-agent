@@ -32,7 +32,8 @@
         @select="handleSelectConversation"
         @delete="handleDeleteConversation"
       />
-      <div class="chat-layout__model-selector">
+      <div class="chat-layout__model-selector"></div>
+      <div class="chat-layout__sidebar-actions">
         <el-select
           v-model="selectedModelId"
           placeholder="选择模型"
@@ -50,9 +51,7 @@
             <span class="chat-layout__model-desc">{{ model.description }}</span>
           </el-option>
         </el-select>
-      </div>
-      <div class="chat-layout__sidebar-actions">
-        <!-- <el-button plain @click="router.push('/memories')">管理记忆</el-button> -->
+        <el-button plain @click="router.push('/memories')">管理记忆</el-button>
         <el-button @click="handleLogout">退出登录</el-button>
       </div>
     </aside>
@@ -327,13 +326,6 @@ async function handleLogout() {
   .el-button {
     width: 100%;
     margin: 0px;
-  }
-}
-
-.chat-layout__model-selector {
-  padding: 0 16px 16px;
-  .el-select {
-    width: 100%;
   }
 }
 
