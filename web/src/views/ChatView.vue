@@ -557,10 +557,6 @@ async function handleLogout() {
     min-height: 0;
   }
 
-  .chat-layout__composer {
-    padding: 12px 0 16px;
-  }
-
   .chat-layout__content {
     padding: 0 14px;
   }

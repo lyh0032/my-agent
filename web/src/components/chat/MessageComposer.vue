@@ -6,7 +6,7 @@
       type="textarea"
       resize="none"
       placeholder="输入问题，回车发送，Shift + 回车换行，聊天消息会自动保存到当前会话"
-      :autosize="{ minRows: 3, maxRows: 8 }"
+      :autosize="{ minRows: 2, maxRows: 5 }"
       @keydown.enter.exact.prevent="handleSubmit"
     />
 
@@ -57,26 +57,19 @@ function handleSubmit() {
 .composer {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 6px;
   min-height: 120px;
   overflow: hidden;
   padding: 16px;
   border: 1px solid rgba(18, 52, 88, 0.12);
   border-radius: 28px;
   background: rgba(255, 255, 255, 0.96);
-  box-shadow:
-    0 18px 40px rgba(18, 52, 88, 0.08),
-    0 6px 14px rgba(18, 52, 88, 0.05);
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+  box-shadow: 0 18px 40px rgba(18, 52, 88, 0.08), 0 6px 14px rgba(18, 52, 88, 0.05);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 
   &:focus-within {
     border-color: rgba(18, 52, 88, 0.22);
-    box-shadow:
-      0 22px 48px rgba(18, 52, 88, 0.12),
-      0 0 0 4px rgba(18, 52, 88, 0.06);
+    box-shadow: 0 22px 48px rgba(18, 52, 88, 0.12), 0 0 0 4px rgba(18, 52, 88, 0.06);
     transform: translateY(-1px);
   }
 }
@@ -142,7 +135,7 @@ function handleSubmit() {
 @media (max-width: 640px) {
   .composer {
     min-height: 120px;
-    padding: 16px 16px 60px;
+    padding: 16px;
     border-radius: 24px;
   }
 
