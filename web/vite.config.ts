@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [vue()],
     server: {
+      allowedHosts: ['.trycloudflare.com'],
       port: 5173,
       proxy: {
         '/api': {

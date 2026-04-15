@@ -14,7 +14,8 @@ app.use(
       'http://127.0.0.1:5173',
       'http://10.200.166.124:5174',
       'http://192.168.154.97:5173',
-      'http://192.168.10.226:5173'
+      'http://192.168.10.226:5173',
+      'https://bin-distribution-intersection-following.trycloudflare.com'
     ],
     credentials: true
   })
