@@ -7,9 +7,20 @@ import {
   fetchConversationDetail,
   fetchConversations,
   renameConversation,
+  toggleConversationPin,
   streamMessage
 } from '../api/chat'
 import type { ConversationSummary, Message } from '../types/chat'
+
+function sortConversations(conversations: ConversationSummary[]) {
+  return [...conversations].sort((left, right) => {
+    if (left.isPinned !== right.isPinned) {
+      return left.isPinned ? -1 : 1
+    }
+
+    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+  })
+}
 
 export const useChatStore = defineStore('chat', () => {
   const conversations = ref<ConversationSummary[]>([])
@@ -29,7 +40,7 @@ export const useChatStore = defineStore('chat', () => {
   async function loadConversations() {
     isLoadingConversations.value = true
     try {
-      conversations.value = await fetchConversations()
+      conversations.value = sortConversations(await fetchConversations())
       if (!activeConversationId.value && conversations.value[0]) {
         activeConversationId.value = conversations.value[0].id
       }
@@ -40,7 +51,7 @@ export const useChatStore = defineStore('chat', () => {
 
   async function createConversationAction(initialMessage?: string) {
     const conversation = await createConversation({ initialMessage })
-    conversations.value = [conversation, ...conversations.value]
+    conversations.value = sortConversations([conversation, ...conversations.value])
     activeConversationId.value = conversation.id
     messages.value = []
     return conversation
@@ -139,10 +150,28 @@ export const useChatStore = defineStore('chat', () => {
 
   async function renameConversationAction(conversationId: string, title: string) {
     const updatedConversation = await renameConversation(conversationId, title)
-    conversations.value = conversations.value.map((conversation) =>
-      conversation.id === conversationId
-        ? { ...conversation, ...updatedConversation }
-        : conversation
+    conversations.value = sortConversations(
+      conversations.value.map((conversation) =>
+        conversation.id === conversationId
+          ? { ...conversation, ...updatedConversation }
+          : conversation
+      )
+    )
+  }
+
+  async function toggleConversationPinAction(conversationId: string, isPinned: boolean) {
+    const updatedConversation = await toggleConversationPin(conversationId, isPinned)
+    conversations.value = sortConversations(
+      conversations.value.map((conversation) =>
+        conversation.id === conversationId
+          ? {
+              ...conversation,
+              ...updatedConversation,
+              lastMessagePreview: conversation.lastMessagePreview,
+              messageCount: conversation.messageCount
+            }
+          : conversation
+      )
     )
   }
 
@@ -176,6 +205,7 @@ export const useChatStore = defineStore('chat', () => {
     selectConversation,
     sendMessage: sendMessageAction,
     renameConversation: renameConversationAction,
+    toggleConversationPin: toggleConversationPinAction,
     deleteConversation: deleteConversationAction
   }
 })

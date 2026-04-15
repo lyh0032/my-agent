@@ -25,11 +25,20 @@
           <span></span>
         </button>
       </div>
+      <div class="chat-layout__conversation-tools">
+        <el-input
+          :model-value="conversationKeyword"
+          placeholder="搜索会话"
+          clearable
+          @update:model-value="handleConversationKeywordChange"
+        />
+        <el-button :icon="Plus" circle @click="handleCreateConversation"></el-button>
+      </div>
       <ConversationList
-        :conversations="chatStore.conversations"
+        :conversations="filteredConversations"
         :active-conversation-id="chatStore.activeConversationId"
-        @create="handleCreateConversation"
         @select="handleSelectConversation"
+        @toggle-pin="handleTogglePinConversation"
         @delete="handleDeleteConversation"
       />
       <div class="chat-layout__model-selector"></div>
@@ -78,24 +87,29 @@
         <span class="chat-layout__user">{{ authStore.user?.username }}</span>
       </header>
 
-      <section class="chat-layout__messages" :key="route.query.conversationId as string">
-        <MessageList
-          ref="msgRef"
-          :messages="chatStore.messages"
-          :streaming="chatStore.isSending"
-          :thinking-text="chatStore.streamingStatusText"
-        />
-      </section>
+      <div class="chat-layout__content" ref="contentRef">
+        <div class="chat-layout__content-inner">
+          <section class="chat-layout__messages" :key="route.query.conversationId as string">
+            <MessageList
+              :messages="chatStore.messages"
+              :streaming="chatStore.isSending"
+              :thinking-text="chatStore.streamingStatusText"
+            />
+          </section>
+        </div>
+      </div>
 
       <footer class="chat-layout__composer">
-        <MessageComposer :loading="chatStore.isSending" @submit="handleSendMessage" />
+        <div class="chat-layout__composer__content">
+          <MessageComposer :loading="chatStore.isSending" @submit="handleSendMessage" />
+        </div>
       </footer>
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, watch, ref, nextTick } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch, ref, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
@@ -110,20 +124,35 @@ import {
   fetchPreferredModel,
   updatePreferredModel
 } from '../api/model-preference'
+import { Plus } from '@element-plus/icons-vue'
 
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 const router = useRouter()
 const route = useRoute()
 
-const msgRef = ref<InstanceType<typeof MessageList>>()
+const contentRef = ref<HTMLDivElement>()
 const isMobile = ref(false)
 const isSidebarOpen = ref(false)
 const availableModels = ref<ModelInfo[]>([])
 const selectedModelId = ref('')
 const isLoadingModels = ref(false)
+const conversationKeyword = ref('')
 
 const MOBILE_BREAKPOINT = 960
+
+const filteredConversations = computed(() => {
+  const keyword = conversationKeyword.value.trim().toLowerCase()
+
+  if (!keyword) {
+    return chatStore.conversations
+  }
+
+  return chatStore.conversations.filter((conversation) => {
+    const haystacks = [conversation.title, conversation.lastMessagePreview]
+    return haystacks.some((value) => value.toLowerCase().includes(keyword))
+  })
+})
 
 onMounted(async () => {
   syncViewport()
@@ -174,7 +203,26 @@ watch(
 )
 
 function scrollToBottom(animated = true) {
-  msgRef.value?.scrollToBottom(animated)
+  const container = contentRef.value
+  if (!container) {
+    return
+  }
+
+  const top = container.scrollHeight
+
+  if ('scrollTo' in container) {
+    try {
+      container.scrollTo({
+        top,
+        behavior: animated ? 'smooth' : 'auto'
+      })
+      return
+    } catch (error) {
+      console.warn('聊天区域滚动失败，降级为直接滚动', error)
+    }
+  }
+
+  container.scrollTop = top
 }
 
 function syncViewport() {
@@ -232,6 +280,14 @@ async function handleDeleteConversation(conversationId: string) {
   closeSidebar()
 }
 
+function handleConversationKeywordChange(value: string | number | undefined) {
+  conversationKeyword.value = typeof value === 'string' ? value : ''
+}
+
+async function handleTogglePinConversation(conversationId: string, isPinned: boolean) {
+  await chatStore.toggleConversationPin(conversationId, isPinned)
+}
+
 async function handleSendMessage(content: string) {
   scrollToBottom(false)
   const hadConversation = Boolean(chatStore.activeConversationId)
@@ -273,6 +329,8 @@ async function handleLogout() {
 
 <style scoped lang="less">
 .chat-layout {
+  --chat-content-max-width: 800px;
+  --chat-composer-height: 142px;
   width: 100%;
   height: 100vh;
   height: 100dvh;
@@ -301,6 +359,20 @@ async function handleLogout() {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.chat-layout__conversation-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 16px 16px;
+  border-bottom: 1px solid rgba(18, 52, 88, 0.2);
+}
+
+.chat-layout__conversation-title {
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .chat-layout__brand h1,
@@ -346,7 +418,7 @@ async function handleLogout() {
 
 .chat-layout__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 16px;
@@ -356,7 +428,7 @@ async function handleLogout() {
 .chat-layout__header-main {
   min-width: 0;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
 }
 
@@ -378,16 +450,39 @@ async function handleLogout() {
   white-space: nowrap;
 }
 
+.chat-layout__content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 16px 0;
+  &::-webkit-scrollbar {
+    display: none;
+    width: 0;
+  }
+}
+
+.chat-layout__content-inner {
+  width: min(100%, var(--chat-content-max-width));
+  min-height: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
 .chat-layout__messages {
   flex: 1;
-  overflow: hidden;
-  display: flex;
-  justify-content: center;
+  min-height: 0;
 }
 
 .chat-layout__composer {
-  padding: 16px;
-  border-top: 1px solid rgba(18, 52, 88, 0.2);
+  margin: 0 auto;
+  width: min(100%, var(--chat-content-max-width));
+  background-color: #fff;
+
+  .chat-layout__composer__content {
+    padding: 16px;
+  }
 }
 
 .chat-layout__backdrop {
@@ -463,7 +558,16 @@ async function handleLogout() {
   }
 
   .chat-layout__composer {
-    padding: 12px;
+    padding: 12px 0 16px;
+  }
+
+  .chat-layout__content {
+    padding: 0 14px;
+  }
+
+  .chat-layout__content-inner {
+    padding-top: 16px;
+    padding-bottom: 16px;
   }
 }
 

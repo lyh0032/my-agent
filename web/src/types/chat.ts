@@ -1,6 +1,7 @@
 export type ConversationSummary = {
   id: string
   title: string
+  isPinned: boolean
   createdAt: string
   updatedAt: string
   lastMessagePreview: string

@@ -5,6 +5,7 @@ import {
   deleteConversation,
   getConversationDetail,
   listConversations,
+  pinConversation,
   updateConversation
 } from './conversation.service'
 import { sendDeleted, sendSuccess } from '../../utils/http'
@@ -41,6 +42,11 @@ export async function updateConversationController(
     req.body
   )
   sendSuccess(res, conversation, '更新会话成功')
+}
+
+export async function pinConversationController(req: Request<ConversationParams>, res: Response) {
+  const conversation = await pinConversation(req.currentUser!.id, req.params.conversationId, req.body)
+  sendSuccess(res, conversation, req.body.isPinned ? '置顶会话成功' : '取消置顶成功')
 }
 
 export async function deleteConversationController(

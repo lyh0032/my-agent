@@ -2,10 +2,6 @@
   color-scheme: light;
   font-family: 'Manrope', 'PingFang SC', 'Noto Sans SC', sans-serif;
   color: #142235;
-  background:
-    radial-gradient(circle at top left, rgba(255, 211, 140, 0.55), transparent 35%),
-    radial-gradient(circle at bottom right, rgba(123, 183, 255, 0.32), transparent 30%),
-    linear-gradient(160deg, #fffaf0 0%, #f4f8ff 48%, #eef4fb 100%);
 }
 
 * {

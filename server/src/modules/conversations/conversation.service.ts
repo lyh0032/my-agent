@@ -1,6 +1,25 @@
+import type { Prisma } from '@prisma/client'
+
 import { prisma } from '../../lib/prisma'
 import { AppError } from '../../utils/app-error'
-import type { CreateConversationBody, UpdateConversationBody } from './conversation.schema'
+import type {
+  CreateConversationBody,
+  PinConversationBody,
+  UpdateConversationBody
+} from './conversation.schema'
+
+const conversationSummarySelect = {
+  id: true,
+  title: true,
+  isPinned: true,
+  createdAt: true,
+  updatedAt: true
+} satisfies Prisma.ConversationSelect
+
+const conversationListOrderBy = [
+  { isPinned: 'desc' },
+  { updatedAt: 'desc' }
+] satisfies Prisma.ConversationOrderByWithRelationInput[]
 
 function buildConversationTitle(title?: string): string {
   if (title?.trim()) {
@@ -13,7 +32,7 @@ function buildConversationTitle(title?: string): string {
 export async function listConversations(userId: string) {
   const conversations = await prisma.conversation.findMany({
     where: { userId },
-    orderBy: { updatedAt: 'desc' },
+    orderBy: conversationListOrderBy,
     include: {
       messages: {
         orderBy: { createdAt: 'desc' },
@@ -29,6 +48,7 @@ export async function listConversations(userId: string) {
   return conversations.map((conversation) => ({
     id: conversation.id,
     title: conversation.title,
+    isPinned: conversation.isPinned,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
     lastMessagePreview: conversation.messages[0]?.content ?? '',
@@ -42,12 +62,7 @@ export async function createConversation(userId: string, data: CreateConversatio
       userId,
       title: buildConversationTitle(data.title)
     },
-    select: {
-      id: true,
-      title: true,
-      createdAt: true,
-      updatedAt: true
-    }
+    select: conversationSummarySelect
   })
 }
 
@@ -78,12 +93,24 @@ export async function updateConversation(
   return prisma.conversation.update({
     where: { id: conversationId },
     data: { title: data.title },
-    select: {
-      id: true,
-      title: true,
-      createdAt: true,
-      updatedAt: true
-    }
+    select: conversationSummarySelect
+  })
+}
+
+export async function pinConversation(
+  userId: string,
+  conversationId: string,
+  data: PinConversationBody
+) {
+  await ensureConversationOwnership(userId, conversationId)
+
+  return prisma.conversation.update({
+    where: { id: conversationId },
+    data: {
+      isPinned: data.isPinned,
+      updatedAt: new Date()
+    },
+    select: conversationSummarySelect
   })
 }
 

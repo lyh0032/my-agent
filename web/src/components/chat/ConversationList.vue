@@ -1,34 +1,48 @@
 <template>
-  <div class="conversation-list" ref="triggerRef">
-    <div class="conversation-list__header">
-      <div class="conversation-list__header__title">会话</div>
-      <el-button type="primary" text @click="$emit('create')">新建</el-button>
-    </div>
+  <div class="conversation-list">
     <div class="conversation-list__scroll">
-      <template v-for="conversation in conversations" :key="conversation.id">
+      <template v-if="conversations.length > 0">
         <div
+          v-for="conversation in conversations"
+          :key="conversation.id"
           class="conversation-item"
           :class="{ 'conversation-item--active': conversation.id === activeConversationId }"
           @click="$emit('select', conversation.id)"
         >
           <div class="conversation-item-left">
-            <span class="conversation-item__title">{{ conversation.title }}</span>
+            <div class="conversation-item__title-row">
+              <span v-if="conversation.isPinned" class="conversation-item__pin-tag">已置顶</span>
+              <span class="conversation-item__title">{{ conversation.title }}</span>
+            </div>
             <span class="conversation-item__preview">{{
               conversation.lastMessagePreview || '暂无消息'
             }}</span>
           </div>
           <div class="conversation-item-right">
-            <span @click="onDelete($event, conversation)">删除</span>
+            <el-button
+              :icon="conversation.isPinned ? ArrowDown : ArrowUp"
+              text
+              size="small"
+              @click="onTogglePin($event, conversation)"
+            ></el-button>
+            <el-button
+              :icon="DeleteFilled"
+              text
+              size="small"
+              @click="onDelete($event, conversation)"
+            ></el-button>
           </div>
         </div>
       </template>
+      <div v-else class="conversation-list__empty">没有匹配的会话</div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ElButton, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import type { ConversationSummary } from '../../types/chat'
+import { ArrowDown, ArrowUp, DeleteFilled } from '@element-plus/icons-vue'
 
 defineProps<{
   conversations: ConversationSummary[]
@@ -36,10 +50,16 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  create: []
   select: [conversationId: string]
+  togglePin: [conversationId: string, isPinned: boolean]
   delete: [conversationId: string]
 }>()
+
+function onTogglePin(e: PointerEvent, conversation: ConversationSummary) {
+  e.stopPropagation()
+  e.preventDefault()
+  emit('togglePin', conversation.id, !conversation.isPinned)
+}
 
 async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
   e.stopPropagation()
@@ -62,19 +82,6 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
   overflow: hidden;
 }
 
-.conversation-list__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 16px 16px 16px;
-
-  &__title {
-    font-size: 18px;
-    font-weight: 600;
-  }
-}
-
 .conversation-list__scroll {
   flex: 1;
   display: flex;
@@ -82,6 +89,13 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
   gap: 8px;
   padding: 16px;
   overflow-y: auto;
+}
+
+.conversation-list__empty {
+  padding: 12px;
+  text-align: center;
+  color: #7b8594;
+  font-size: 13px;
 }
 
 .conversation-item {
@@ -95,6 +109,7 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
   cursor: pointer;
   display: flex;
   overflow: hidden;
+  background: rgba(18, 52, 88, 0.08);
 
   &-left {
     display: flex;
@@ -115,6 +130,20 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
   }
 }
 
+.conversation-item__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.conversation-item-right {
+  .el-button {
+    padding: 0 6px;
+    margin: 0px;
+  }
+}
+
 .conversation-item:hover {
   .conversation-item-right {
     display: flex;
@@ -123,9 +152,8 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
   }
 }
 
-.conversation-item:hover,
 .conversation-item--active {
-  background: rgba(18, 52, 88, 0.08);
+  background: rgba(174, 213, 255, 0.517);
 }
 
 .conversation-item__title {
@@ -133,6 +161,16 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.conversation-item__pin-tag {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(140, 92, 42, 0.12);
+  color: #8c5c2a;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .conversation-item__preview {

@@ -327,7 +327,6 @@ function formatDate(value: string) {
 }
 
 .memory-layout__header {
-  align-items: flex-start;
   border-bottom: 1px solid rgba(18, 52, 88, 0.2);
 }
 

@@ -8,11 +8,13 @@ import {
   deleteConversationController,
   getConversationDetailController,
   listConversationsController,
+  pinConversationController,
   updateConversationController
 } from './conversation.controller'
 import {
   conversationParamsSchema,
   createConversationBodySchema,
+  pinConversationBodySchema,
   updateConversationBodySchema
 } from './conversation.schema'
 
@@ -34,6 +36,11 @@ router.patch(
   '/:conversationId',
   validate({ params: conversationParamsSchema, body: updateConversationBodySchema }),
   asyncHandler(updateConversationController)
+)
+router.patch(
+  '/:conversationId/pin',
+  validate({ params: conversationParamsSchema, body: pinConversationBodySchema }),
+  asyncHandler(pinConversationController)
 )
 router.delete(
   '/:conversationId',

@@ -1,5 +1,5 @@
 <template>
-  <div class="message-list" ref="listRef">
+  <div class="message-list">
     <div v-if="messages.length === 0" class="message-list__empty">
       <h3>开始一段新对话</h3>
       <p>输入你的问题，系统会保存会话和消息历史。</p>
@@ -58,21 +58,11 @@ import type { Message } from '../../types/chat'
 import { renderMarkdown } from '../../utils/markdown'
 import { dayjs } from 'element-plus'
 
-const listRef = ref<HTMLDivElement>()
-
 const props = defineProps<{
   messages: Message[]
   streaming?: boolean
   thinkingText?: string
 }>()
-
-defineExpose({
-  scrollToBottom(isSmooth = true) {
-    if (listRef.value) {
-      scrollToBottom(listRef.value, isSmooth)
-    }
-  }
-})
 
 const roleLabelMap = {
   user: '你',
@@ -99,43 +89,17 @@ const showThinkingBubble = computed(() => {
 function renderedContent(message: Message) {
   return renderMarkdown(message.content)
 }
-
-function scrollToBottom(element: HTMLElement, isSmooth = true) {
-  let target = element
-
-  const scrollHeight = target.scrollHeight
-
-  if ('scrollTo' in target) {
-    try {
-      target.scrollTo({
-        top: scrollHeight,
-        behavior: isSmooth ? 'smooth' : 'auto'
-      })
-      return // 成功执行则退出
-    } catch (e) {
-      console.warn('平滑滚动不支持或出错，降级为直接滚动', e)
-    }
-  }
-
-  target.scrollTop = scrollHeight
-}
 </script>
 
 <style scoped lang="less">
 .message-list {
-  flex: 1;
-  width: 0;
-  height: 100%;
-  overflow: auto;
-  padding: 16px;
-  max-width: 1000px;
+  width: 100%;
+  min-height: 100%;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  &::-webkit-scrollbar {
-    display: none;
-    width: 0;
-  }
+ 
 }
 
 .message-list__empty {

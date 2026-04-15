@@ -111,6 +111,19 @@ export async function deleteConversation(conversationId: string): Promise<void> 
   await http.delete(`/conversations/${conversationId}`)
 }
 
+export async function toggleConversationPin(
+  conversationId: string,
+  isPinned: boolean
+): Promise<ConversationSummary> {
+  const response = await http.patch<ApiResponse<ConversationSummary>>(
+    `/conversations/${conversationId}/pin`,
+    {
+      isPinned
+    }
+  )
+  return response.data.data
+}
+
 export async function fetchMessages(conversationId: string): Promise<Message[]> {
   const response = await http.get<ApiResponse<{ messages: Message[] }>>(
     `/conversations/${conversationId}/messages`
