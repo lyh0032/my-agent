@@ -8,6 +8,13 @@ type AutoMemoryInput = {
   content: string
 }
 
+export type AutoMemoryAction = {
+  type: 'create' | 'update' | 'skip'
+  memory: AutoMemoryInput
+  existingMemoryId?: string
+  reason: string
+}
+
 export async function listMemories(userId: string, query: MemoryQuery) {
   const memories = await prisma.memory.findMany({
     where: {
@@ -75,8 +82,8 @@ export async function deleteMemory(userId: string, memoryId: string) {
   await prisma.memory.delete({ where: { id: memoryId } })
 }
 
-export async function upsertAutoMemories(userId: string, memories: AutoMemoryInput[]) {
-  if (memories.length === 0) {
+export async function applyAutoMemoryActions(userId: string, actions: AutoMemoryAction[]) {
+  if (actions.length === 0) {
     return {
       createdCount: 0,
       updatedCount: 0,
@@ -88,39 +95,43 @@ export async function upsertAutoMemories(userId: string, memories: AutoMemoryInp
   let updatedCount = 0
   let skippedCount = 0
 
-  for (const memory of memories) {
-    const existingMemory = await prisma.memory.findUnique({
-      where: {
-        userId_key: {
-          userId,
-          key: memory.key
-        }
-      }
-    })
+  for (const action of actions) {
+    if (action.type === 'skip') {
+      skippedCount += 1
+      continue
+    }
 
-    if (!existingMemory) {
+    if (action.type === 'create') {
       await prisma.memory.create({
         data: {
           userId,
-          type: memory.type,
-          key: memory.key,
-          content: memory.content
+          type: action.memory.type,
+          key: action.memory.key,
+          content: action.memory.content
         }
       })
       createdCount += 1
       continue
     }
 
-    if (existingMemory.type === memory.type && existingMemory.content === memory.content) {
-      skippedCount += 1
+    if (!action.existingMemoryId) {
+      await prisma.memory.create({
+        data: {
+          userId,
+          type: action.memory.type,
+          key: action.memory.key,
+          content: action.memory.content
+        }
+      })
+      createdCount += 1
       continue
     }
 
     await prisma.memory.update({
-      where: { id: existingMemory.id },
+      where: { id: action.existingMemoryId },
       data: {
-        type: memory.type,
-        content: memory.content
+        type: action.memory.type,
+        content: action.memory.content
       }
     })
     updatedCount += 1

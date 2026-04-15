@@ -32,7 +32,7 @@
       <div class="memory-layout__summary">
         <p class="memory-layout__summary-title">长期记忆概览</p>
         <p class="memory-layout__summary-text">
-          这里展示系统从对话中沉淀下来的稳定信息。用户不能手动新增或编辑，只保留删除能力。
+          这里展示你和系统从对话中沉淀下来的关键信息，你可以随时删除。
         </p>
       </div>
 

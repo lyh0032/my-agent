@@ -2,14 +2,13 @@ import { prisma } from '../../lib/prisma'
 import {
   generateAssistantReply,
   generateConversationTitle,
-  generateMemoryCandidates,
   streamAssistantReply
 } from '../../lib/ai'
+import { runLongTermMemoryGraph } from '../../lib/memory-graph'
 import {
   ensureConversationOwnership,
   updateConversation
 } from '../conversations/conversation.service'
-import { upsertAutoMemories } from '../memories/memory.service'
 import { getModelNameForLLM } from '../model-preferences/model-preference.service'
 import type { CreateMessageBody } from './message.schema'
 
@@ -20,6 +19,7 @@ type MessageGenerationContext = {
     content: string
   }>
   memories: Array<{
+    id: string
     type: 'profile' | 'preference' | 'summary' | 'fact'
     key: string
     content: string
@@ -43,6 +43,7 @@ async function loadMessageGenerationContext(userId: string, conversationId: stri
   return {
     history,
     memories: memories.map((memory) => ({
+      id: memory.id,
       type: memory.type,
       key: memory.key,
       content: memory.content
@@ -104,18 +105,14 @@ function scheduleUserMemoryExtraction(
   }
 ) {
   void (async () => {
-    const extractedMemories = await generateMemoryCandidates({
+    const result = await runLongTermMemoryGraph({
+      userId,
       userMessage: payload.userMessage,
       existingMemories: payload.existingMemories,
       modelOverride: payload.modelOverride
     })
 
-    if (extractedMemories.length === 0) {
-      return
-    }
-
-    const result = await upsertAutoMemories(userId, extractedMemories)
-    console.log('Auto memories synced:', result)
+    console.log('Auto memory graph completed:', result.persistResult)
   })().catch((error) => {
     console.error('Failed to extract user memories:', error)
   })

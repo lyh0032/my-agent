@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@langchain/core": "^0.3.28",
+    "@langchain/langgraph": "^1.2.8",
     "@langchain/openai": "^0.4.5",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@prisma/client": "^6.6.0",
