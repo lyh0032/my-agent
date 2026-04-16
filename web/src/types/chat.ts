@@ -13,7 +13,9 @@ export type Message = {
   conversationId: string
   role: 'user' | 'assistant' | 'system'
   content: string
+  status: 'generating' | 'completed' | 'cancelled' | 'failed'
   createdAt: string
+  updatedAt: string
 }
 
 export type ConversationDetail = {
@@ -44,8 +46,6 @@ export type ModelInfo = {
   name: string
   description: string
 }
-
-
 
 export type UpdateModelPreferenceInput = {
   modelId: string

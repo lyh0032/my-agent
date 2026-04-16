@@ -16,6 +16,12 @@
           <span class="message-bubble__time">{{
             dayjs(message.createdAt).format('YYYY-MM-DD HH:mm:ss')
           }}</span>
+          <span
+            v-if="message.role === 'assistant' && message.status !== 'completed'"
+            class="message-bubble__status"
+          >
+            {{ messageStatusLabelMap[message.status] }}
+          </span>
         </span>
         <div
           class="message-bubble__content"
@@ -53,7 +59,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import type { Message } from '../../types/chat'
 import { renderMarkdown } from '../../utils/markdown'
 import { dayjs } from 'element-plus'
@@ -70,10 +76,18 @@ const roleLabelMap = {
   system: '系统'
 } as const
 
+const messageStatusLabelMap = {
+  generating: '生成中',
+  cancelled: '已停止',
+  failed: '已失败',
+  completed: '已完成'
+} as const
+
 function showStreamingCursor(message: Message) {
   return (
     props.streaming === true &&
     message.role === 'assistant' &&
+    message.status === 'generating' &&
     props.messages[props.messages.length - 1]?.id === message.id
   )
 }
@@ -99,7 +113,6 @@ function renderedContent(message: Message) {
   display: flex;
   flex-direction: column;
   gap: 16px;
- 
 }
 
 .message-list__empty {
@@ -150,6 +163,12 @@ function renderedContent(message: Message) {
 
 .message-bubble__time {
   color: #888888;
+  font-size: 10px;
+}
+
+.message-bubble__status {
+  margin-left: 8px;
+  color: #8c5c2a;
   font-size: 10px;
 }
 

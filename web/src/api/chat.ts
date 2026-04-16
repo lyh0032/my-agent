@@ -12,9 +12,16 @@ import { apiBaseUrl, http } from './http'
 
 type StreamMessageHandlers = {
   onUserMessage?: (message: Message) => void
+  onAssistantMessage?: (message: Message) => void
   onAssistantStatus?: (status: StreamAssistantStatus) => void
   onAssistantDelta?: (delta: string) => void
   onAssistantDone?: (payload: { assistantMessage: Message; conversationId: string }) => void
+  onAssistantCancelled?: (payload: { assistantMessage: Message; conversationId: string }) => void
+  onAssistantFailed?: (payload: {
+    assistantMessage: Message
+    conversationId: string
+    message: string
+  }) => void
 }
 
 type ParsedSseEvent = {
@@ -144,8 +151,9 @@ export async function sendMessage(
 export async function streamMessage(
   conversationId: string,
   input: CreateMessageInput,
-  handlers: StreamMessageHandlers
-): Promise<{ conversationId: string }> {
+  handlers: StreamMessageHandlers,
+  signal?: AbortSignal
+): Promise<{ conversationId: string; assistantMessageId?: string }> {
   const token = getStoredToken()
   const response = await fetch(`${apiBaseUrl}/conversations/${conversationId}/messages/stream`, {
     method: 'POST',
@@ -154,7 +162,8 @@ export async function streamMessage(
       Accept: 'text/event-stream',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
-    body: JSON.stringify(input)
+    body: JSON.stringify(input),
+    signal
   })
 
   if (response.status === 401) {
@@ -171,6 +180,7 @@ export async function streamMessage(
   const decoder = new TextDecoder()
   let buffer = ''
   let latestConversationId = conversationId
+  let latestAssistantMessageId = ''
 
   while (true) {
     const { done, value } = await reader.read()
@@ -202,6 +212,12 @@ export async function streamMessage(
         handlers.onUserMessage?.(parsed.data as Message)
       }
 
+      if (parsed.event === 'assistant-message' && parsed.data) {
+        const assistantMessage = parsed.data as Message
+        latestAssistantMessageId = assistantMessage.id
+        handlers.onAssistantMessage?.(assistantMessage)
+      }
+
       if (parsed.event === 'assistant-status' && parsed.data) {
         handlers.onAssistantStatus?.(parsed.data as StreamAssistantStatus)
       }
@@ -213,7 +229,26 @@ export async function streamMessage(
       if (parsed.event === 'assistant-done' && parsed.data) {
         const payload = parsed.data as { assistantMessage: Message; conversationId: string }
         latestConversationId = payload.conversationId
+        latestAssistantMessageId = payload.assistantMessage.id
         handlers.onAssistantDone?.(payload)
+      }
+
+      if (parsed.event === 'assistant-cancelled' && parsed.data) {
+        const payload = parsed.data as { assistantMessage: Message; conversationId: string }
+        latestConversationId = payload.conversationId
+        latestAssistantMessageId = payload.assistantMessage.id
+        handlers.onAssistantCancelled?.(payload)
+      }
+
+      if (parsed.event === 'assistant-failed' && parsed.data) {
+        const payload = parsed.data as {
+          assistantMessage: Message
+          conversationId: string
+          message: string
+        }
+        latestConversationId = payload.conversationId
+        latestAssistantMessageId = payload.assistantMessage.id
+        handlers.onAssistantFailed?.(payload)
       }
 
       if (parsed.event === 'error' && parsed.data) {
@@ -233,8 +268,189 @@ export async function streamMessage(
   if (remainingEvent?.event === 'assistant-done' && remainingEvent.data) {
     const payload = remainingEvent.data as { assistantMessage: Message; conversationId: string }
     latestConversationId = payload.conversationId
+    latestAssistantMessageId = payload.assistantMessage.id
     handlers.onAssistantDone?.(payload)
   }
 
-  return { conversationId: latestConversationId }
+  if (remainingEvent?.event === 'assistant-cancelled' && remainingEvent.data) {
+    const payload = remainingEvent.data as { assistantMessage: Message; conversationId: string }
+    latestConversationId = payload.conversationId
+    latestAssistantMessageId = payload.assistantMessage.id
+    handlers.onAssistantCancelled?.(payload)
+  }
+
+  if (remainingEvent?.event === 'assistant-failed' && remainingEvent.data) {
+    const payload = remainingEvent.data as {
+      assistantMessage: Message
+      conversationId: string
+      message: string
+    }
+    latestConversationId = payload.conversationId
+    latestAssistantMessageId = payload.assistantMessage.id
+    handlers.onAssistantFailed?.(payload)
+  }
+
+  return {
+    conversationId: latestConversationId,
+    assistantMessageId: latestAssistantMessageId || undefined
+  }
+}
+
+export async function subscribeMessageStream(
+  conversationId: string,
+  messageId: string,
+  handlers: StreamMessageHandlers,
+  signal?: AbortSignal
+): Promise<{ conversationId: string; assistantMessageId?: string }> {
+  const token = getStoredToken()
+  const response = await fetch(
+    `${apiBaseUrl}/conversations/${conversationId}/messages/${messageId}/stream`,
+    {
+      method: 'GET',
+      headers: {
+        Accept: 'text/event-stream',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      signal
+    }
+  )
+
+  if (response.status === 401) {
+    handleAuthFailure()
+    throw new Error('未登录或登录已过期')
+  }
+
+  if (!response.ok || !response.body) {
+    const text = await response.text()
+    throw new Error(text || '恢复流式请求失败')
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let latestConversationId = conversationId
+  let latestAssistantMessageId = messageId
+
+  while (true) {
+    const { done, value } = await reader.read()
+
+    if (done) {
+      buffer += decoder.decode()
+      break
+    }
+
+    buffer += decoder.decode(value, { stream: true })
+
+    while (true) {
+      const boundary = findSseBoundary(buffer)
+
+      if (!boundary) {
+        break
+      }
+
+      const rawEvent = buffer.slice(0, boundary.index)
+      buffer = buffer.slice(boundary.index + boundary.length)
+
+      const parsed = parseSseEvent(rawEvent)
+
+      if (!parsed) {
+        continue
+      }
+
+      if (parsed.event === 'assistant-message' && parsed.data) {
+        const assistantMessage = parsed.data as Message
+        latestAssistantMessageId = assistantMessage.id
+        handlers.onAssistantMessage?.(assistantMessage)
+      }
+
+      if (parsed.event === 'assistant-status' && parsed.data) {
+        handlers.onAssistantStatus?.(parsed.data as StreamAssistantStatus)
+      }
+
+      if (parsed.event === 'assistant-delta' && parsed.data) {
+        handlers.onAssistantDelta?.((parsed.data as { delta: string }).delta)
+      }
+
+      if (parsed.event === 'assistant-done' && parsed.data) {
+        const payload = parsed.data as { assistantMessage: Message; conversationId: string }
+        latestConversationId = payload.conversationId
+        latestAssistantMessageId = payload.assistantMessage.id
+        handlers.onAssistantDone?.(payload)
+      }
+
+      if (parsed.event === 'assistant-cancelled' && parsed.data) {
+        const payload = parsed.data as { assistantMessage: Message; conversationId: string }
+        latestConversationId = payload.conversationId
+        latestAssistantMessageId = payload.assistantMessage.id
+        handlers.onAssistantCancelled?.(payload)
+      }
+
+      if (parsed.event === 'assistant-failed' && parsed.data) {
+        const payload = parsed.data as {
+          assistantMessage: Message
+          conversationId: string
+          message: string
+        }
+        latestConversationId = payload.conversationId
+        latestAssistantMessageId = payload.assistantMessage.id
+        handlers.onAssistantFailed?.(payload)
+      }
+
+      if (parsed.event === 'error' && parsed.data) {
+        const payload = parsed.data as { message?: string }
+        throw new Error(payload.message || '恢复流式请求失败')
+      }
+    }
+  }
+
+  const remainingEvent = parseSseEvent(buffer.trim())
+
+  if (remainingEvent?.event === 'error' && remainingEvent.data) {
+    const payload = remainingEvent.data as { message?: string }
+    throw new Error(payload.message || '恢复流式请求失败')
+  }
+
+  if (remainingEvent?.event === 'assistant-message' && remainingEvent.data) {
+    const assistantMessage = remainingEvent.data as Message
+    latestAssistantMessageId = assistantMessage.id
+    handlers.onAssistantMessage?.(assistantMessage)
+  }
+
+  if (remainingEvent?.event === 'assistant-done' && remainingEvent.data) {
+    const payload = remainingEvent.data as { assistantMessage: Message; conversationId: string }
+    latestConversationId = payload.conversationId
+    latestAssistantMessageId = payload.assistantMessage.id
+    handlers.onAssistantDone?.(payload)
+  }
+
+  if (remainingEvent?.event === 'assistant-cancelled' && remainingEvent.data) {
+    const payload = remainingEvent.data as { assistantMessage: Message; conversationId: string }
+    latestConversationId = payload.conversationId
+    latestAssistantMessageId = payload.assistantMessage.id
+    handlers.onAssistantCancelled?.(payload)
+  }
+
+  if (remainingEvent?.event === 'assistant-failed' && remainingEvent.data) {
+    const payload = remainingEvent.data as {
+      assistantMessage: Message
+      conversationId: string
+      message: string
+    }
+    latestConversationId = payload.conversationId
+    latestAssistantMessageId = payload.assistantMessage.id
+    handlers.onAssistantFailed?.(payload)
+  }
+
+  return {
+    conversationId: latestConversationId,
+    assistantMessageId: latestAssistantMessageId || undefined
+  }
+}
+
+export async function cancelMessageStream(conversationId: string, messageId: string) {
+  const response = await http.post<
+    ApiResponse<{ assistantMessage: Message; conversationId: string }>
+  >(`/conversations/${conversationId}/messages/${messageId}/cancel`)
+
+  return response.data.data
 }

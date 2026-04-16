@@ -101,7 +101,12 @@
 
       <footer class="chat-layout__composer">
         <div class="chat-layout__composer__content">
-          <MessageComposer :loading="chatStore.isSending" @submit="handleSendMessage" />
+          <MessageComposer
+            :loading="chatStore.isSending"
+            :can-stop="chatStore.isSending"
+            @submit="handleSendMessage"
+            @cancel="handleStopStreaming"
+          />
         </div>
       </footer>
     </main>
@@ -177,6 +182,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', syncViewport)
+  chatStore.detachActiveStream()
 })
 
 watch(
@@ -296,6 +302,10 @@ async function handleSendMessage(content: string) {
   if (!hadConversation) {
     await router.replace({ path: '/chat', query: { conversationId: result.conversationId } })
   }
+}
+
+async function handleStopStreaming() {
+  await chatStore.stopStreaming()
 }
 
 async function loadModelPreferences() {
@@ -455,7 +465,7 @@ async function handleLogout() {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 16px 16px 0;
+  padding: 16px;
   &::-webkit-scrollbar {
     display: none;
     width: 0;
@@ -476,12 +486,11 @@ async function handleLogout() {
 }
 
 .chat-layout__composer {
-  margin: 0 auto;
-  width: min(100%, var(--chat-content-max-width));
-  background-color: #fff;
+  padding: 0 16px 16px;
 
   .chat-layout__composer__content {
-    padding: 16px;
+    width: min(100%, var(--chat-content-max-width));
+    margin: 0 auto;
   }
 }
 

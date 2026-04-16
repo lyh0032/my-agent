@@ -1,12 +1,14 @@
-import { computed, nextTick, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import {
+  cancelMessageStream,
   createConversation,
   deleteConversation,
   fetchConversationDetail,
   fetchConversations,
   renameConversation,
+  subscribeMessageStream,
   toggleConversationPin,
   streamMessage
 } from '../api/chat'
@@ -30,12 +32,210 @@ export const useChatStore = defineStore('chat', () => {
   const isLoadingMessages = ref(false)
   const isSending = ref(false)
   const streamingStatusText = ref('')
+  const activeStreamingConversationId = ref('')
+  const activeStreamingMessageId = ref('')
+
+  let activeStreamAbortController: AbortController | null = null
 
   const activeConversation = computed(
     () =>
       conversations.value.find((conversation) => conversation.id === activeConversationId.value) ??
       null
   )
+
+  function isAbortError(error: unknown) {
+    return error instanceof Error && error.name === 'AbortError'
+  }
+
+  function upsertMessage(message: Message) {
+    const index = messages.value.findIndex((item) => item.id === message.id)
+
+    if (index === -1) {
+      messages.value = [...messages.value, message]
+      return
+    }
+
+    messages.value = messages.value.map((item, itemIndex) => (itemIndex === index ? message : item))
+  }
+
+  function updateMessage(messageId: string, updater: (message: Message) => Message) {
+    messages.value = messages.value.map((message) =>
+      message.id === messageId ? updater(message) : message
+    )
+  }
+
+  function clearActiveStream(controller?: AbortController) {
+    if (controller && activeStreamAbortController !== controller) {
+      return
+    }
+
+    if (!controller || activeStreamAbortController === controller) {
+      activeStreamAbortController = null
+    }
+
+    activeStreamingConversationId.value = ''
+    activeStreamingMessageId.value = ''
+    isSending.value = false
+    streamingStatusText.value = ''
+  }
+
+  function detachActiveStream() {
+    activeStreamAbortController?.abort()
+    clearActiveStream()
+  }
+
+  function startActiveStreamSubscription(
+    conversationId: string,
+    controller: AbortController,
+    messageId = ''
+  ) {
+    activeStreamAbortController = controller
+    activeStreamingConversationId.value = conversationId
+    activeStreamingMessageId.value = messageId
+    isSending.value = true
+  }
+
+  function findGeneratingAssistantMessage() {
+    return [...messages.value]
+      .reverse()
+      .find((message) => message.role === 'assistant' && message.status === 'generating')
+  }
+
+  function buildStreamHandlers(conversationId: string, controller: AbortController) {
+    function isCurrentController() {
+      return activeStreamAbortController === controller
+    }
+
+    function finalizeAssistantMessage(message: Message) {
+      if (!isCurrentController()) {
+        return
+      }
+
+      upsertMessage(message)
+
+      if (activeStreamingMessageId.value === message.id) {
+        clearActiveStream(controller)
+      }
+
+      void loadConversations()
+    }
+
+    return {
+      onUserMessage(userMessage: Message) {
+        if (!isCurrentController() || activeConversationId.value !== conversationId) {
+          return
+        }
+
+        upsertMessage(userMessage)
+        void loadConversations()
+      },
+      onAssistantMessage(assistantMessage: Message) {
+        if (!isCurrentController() || activeConversationId.value !== conversationId) {
+          return
+        }
+
+        upsertMessage(assistantMessage)
+
+        if (assistantMessage.status === 'generating') {
+          activeStreamingMessageId.value = assistantMessage.id
+          activeStreamingConversationId.value = conversationId
+          isSending.value = true
+        } else {
+          clearActiveStream(controller)
+        }
+
+        void loadConversations()
+      },
+      onAssistantStatus(status: { stage: 'thinking' | 'tool' | 'reasoning'; text: string }) {
+        if (!isCurrentController() || activeConversationId.value !== conversationId) {
+          return
+        }
+
+        streamingStatusText.value = status.text
+      },
+      onAssistantDelta(delta: string) {
+        if (!isCurrentController() || activeConversationId.value !== conversationId) {
+          return
+        }
+
+        if (!activeStreamingMessageId.value) {
+          return
+        }
+
+        streamingStatusText.value = ''
+        updateMessage(activeStreamingMessageId.value, (message) => ({
+          ...message,
+          content: `${message.content}${delta}`,
+          status: 'generating',
+          updatedAt: new Date().toISOString()
+        }))
+      },
+      onAssistantDone(payload: { assistantMessage: Message; conversationId: string }) {
+        if (payload.conversationId !== conversationId) {
+          return
+        }
+
+        finalizeAssistantMessage(payload.assistantMessage)
+      },
+      onAssistantCancelled(payload: { assistantMessage: Message; conversationId: string }) {
+        if (payload.conversationId !== conversationId) {
+          return
+        }
+
+        finalizeAssistantMessage(payload.assistantMessage)
+      },
+      onAssistantFailed(payload: {
+        assistantMessage: Message
+        conversationId: string
+        message: string
+      }) {
+        if (payload.conversationId !== conversationId) {
+          return
+        }
+
+        finalizeAssistantMessage(payload.assistantMessage)
+      }
+    }
+  }
+
+  function resumeStreamIfNeeded(conversationId: string) {
+    const generatingMessage = findGeneratingAssistantMessage()
+
+    if (!generatingMessage) {
+      clearActiveStream()
+      return
+    }
+
+    detachActiveStream()
+
+    const controller = new AbortController()
+    startActiveStreamSubscription(conversationId, controller, generatingMessage.id)
+    streamingStatusText.value = generatingMessage.content ? '' : '正在恢复输出...'
+
+    void subscribeMessageStream(
+      conversationId,
+      generatingMessage.id,
+      buildStreamHandlers(conversationId, controller),
+      controller.signal
+    )
+      .catch((error) => {
+        if (isAbortError(error)) {
+          return
+        }
+
+        console.error('Failed to resume message stream:', error)
+        clearActiveStream(controller)
+      })
+      .finally(() => {
+        const stillGenerating = messages.value.some(
+          (message) => message.id === generatingMessage.id && message.status === 'generating'
+        )
+
+        if (!stillGenerating) {
+          clearActiveStream(controller)
+        }
+      })
+  }
 
   async function loadConversations() {
     isLoadingConversations.value = true
@@ -58,11 +258,13 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function selectConversation(conversationId: string) {
+    detachActiveStream()
     activeConversationId.value = conversationId
     isLoadingMessages.value = true
     try {
       const detail = await fetchConversationDetail(conversationId)
       messages.value = detail.messages
+      resumeStreamIfNeeded(conversationId)
     } finally {
       isLoadingMessages.value = false
     }
@@ -74,78 +276,64 @@ export const useChatStore = defineStore('chat', () => {
       activeConversationId.value = conversation.id
     }
 
-    isSending.value = true
-    streamingStatusText.value = '正在思考问题...'
     const conversationId = activeConversationId.value
-    const streamingAssistantId = `assistant-stream-${Date.now()}`
-    let hasStreamingAssistant = false
+    detachActiveStream()
+
+    const controller = new AbortController()
+    startActiveStreamSubscription(conversationId, controller)
+    streamingStatusText.value = '正在思考问题...'
 
     try {
       const result = await streamMessage(
         conversationId,
         { content },
-        {
-          onUserMessage(userMessage) {
-            messages.value = [...messages.value, userMessage]
-          },
-          onAssistantStatus(status) {
-            streamingStatusText.value = status.text
-          },
-          onAssistantDelta(delta) {
-            streamingStatusText.value = ''
-            if (!hasStreamingAssistant) {
-              hasStreamingAssistant = true
-              messages.value = [
-                ...messages.value,
-                {
-                  id: streamingAssistantId,
-                  conversationId,
-                  role: 'assistant',
-                  content: delta,
-                  createdAt: new Date().toISOString()
-                }
-              ]
-              return
-            }
-
-            messages.value = messages.value.map((message) =>
-              message.id === streamingAssistantId
-                ? { ...message, content: `${message.content}${delta}` }
-                : message
-            )
-          },
-          onAssistantDone(payload) {
-            streamingStatusText.value = ''
-            messages.value = hasStreamingAssistant
-              ? messages.value.map((message) =>
-                  message.id === streamingAssistantId ? payload.assistantMessage : message
-                )
-              : [...messages.value, payload.assistantMessage]
-          }
-        }
+        buildStreamHandlers(conversationId, controller),
+        controller.signal
       )
 
       await loadConversations()
       activeConversationId.value = result.conversationId
       return result
     } catch (error) {
-      streamingStatusText.value = ''
-      if (hasStreamingAssistant) {
-        messages.value = messages.value.map((message) =>
-          message.id === streamingAssistantId
-            ? {
-                ...message,
-                content: message.content ? `${message.content}\n\n[流式输出中断]` : '[流式输出中断]'
-              }
-            : message
-        )
+      if (isAbortError(error)) {
+        return {
+          conversationId,
+          assistantMessageId: activeStreamingMessageId.value || undefined
+        }
       }
 
       throw error
     } finally {
-      isSending.value = false
-      streamingStatusText.value = ''
+      const stillGenerating = messages.value.some(
+        (message) =>
+          message.id === activeStreamingMessageId.value && message.status === 'generating'
+      )
+
+      if (!stillGenerating) {
+        clearActiveStream(controller)
+      }
     }
+  }
+
+  async function stopStreamingAction() {
+    const conversationId = activeStreamingConversationId.value || activeConversationId.value
+    const messageId = activeStreamingMessageId.value || findGeneratingAssistantMessage()?.id
+
+    if (!conversationId || !messageId) {
+      return
+    }
+
+    updateMessage(messageId, (message) => ({
+      ...message,
+      status: 'cancelled',
+      updatedAt: new Date().toISOString()
+    }))
+
+    detachActiveStream()
+
+    const result = await cancelMessageStream(conversationId, messageId)
+    upsertMessage(result.assistantMessage)
+    await loadConversations()
   }
 
   async function renameConversationAction(conversationId: string, title: string) {
@@ -200,10 +388,14 @@ export const useChatStore = defineStore('chat', () => {
     isLoadingMessages,
     isSending,
     streamingStatusText,
+    activeStreamingConversationId,
+    activeStreamingMessageId,
     loadConversations,
     createConversation: createConversationAction,
     selectConversation,
     sendMessage: sendMessageAction,
+    stopStreaming: stopStreamingAction,
+    detachActiveStream,
     renameConversation: renameConversationAction,
     toggleConversationPin: toggleConversationPinAction,
     deleteConversation: deleteConversationAction

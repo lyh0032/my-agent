@@ -36,7 +36,7 @@ export async function listConversations(userId: string) {
     include: {
       messages: {
         orderBy: { createdAt: 'desc' },
-        take: 1,
+        take: 2,
         select: { content: true }
       },
       _count: {
@@ -51,7 +51,8 @@ export async function listConversations(userId: string) {
     isPinned: conversation.isPinned,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
-    lastMessagePreview: conversation.messages[0]?.content ?? '',
+    lastMessagePreview:
+      conversation.messages.find((message) => message.content.trim().length > 0)?.content ?? '',
     messageCount: conversation._count.messages
   }))
 }

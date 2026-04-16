@@ -13,11 +13,19 @@
     <div class="composer__actions">
       <span class="composer__hint">Shift + Enter 换行</span>
       <el-button
+        v-if="canStop"
+        class="composer__stop"
+        type="danger"
+        circle
+        :icon="VideoPause"
+        @click="handleCancel"
+      />
+      <el-button
+        v-else
         class="composer__send"
         type="primary"
         circle
         :icon="Promotion"
-        :loading="loading"
         :disabled="!canSubmit"
         @click="handleSubmit"
       />
@@ -27,14 +35,16 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Promotion } from '@element-plus/icons-vue'
+import { Promotion, VideoPause } from '@element-plus/icons-vue'
 
 const props = defineProps<{
   loading?: boolean
+  canStop?: boolean
 }>()
 
 const emit = defineEmits<{
   submit: [content: string]
+  cancel: []
 }>()
 
 const content = ref('')
@@ -51,6 +61,10 @@ function handleSubmit() {
   emit('submit', value)
   content.value = ''
 }
+
+function handleCancel() {
+  emit('cancel')
+}
 </script>
 
 <style scoped lang="less">
@@ -63,13 +77,19 @@ function handleSubmit() {
   padding: 16px;
   border: 1px solid rgba(18, 52, 88, 0.12);
   border-radius: 28px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 18px 40px rgba(18, 52, 88, 0.08), 0 6px 14px rgba(18, 52, 88, 0.05);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  box-shadow:
+    0 18px 40px rgba(18, 52, 88, 0.08),
+    0 6px 14px rgba(18, 52, 88, 0.05);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 
   &:focus-within {
     border-color: rgba(18, 52, 88, 0.22);
-    box-shadow: 0 22px 48px rgba(18, 52, 88, 0.12), 0 0 0 4px rgba(18, 52, 88, 0.06);
+    box-shadow:
+      0 22px 48px rgba(18, 52, 88, 0.12),
+      0 0 0 4px rgba(18, 52, 88, 0.06);
     transform: translateY(-1px);
   }
 }
@@ -130,6 +150,11 @@ function handleSubmit() {
   :deep(.el-icon) {
     font-size: 16px;
   }
+}
+
+.composer__stop {
+  border: 0;
+  box-shadow: 0 10px 20px rgba(193, 62, 62, 0.18);
 }
 
 @media (max-width: 640px) {

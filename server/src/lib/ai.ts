@@ -25,6 +25,7 @@ type GenerateAssistantReplyParams = {
   conversationHistory: ConversationMessage[]
   onStatusChange?: (payload: { stage: 'thinking' | 'tool' | 'reasoning'; text: string }) => void
   modelOverride?: string
+  signal?: AbortSignal
 }
 
 type GenerateConversationTitleParams = {
@@ -490,12 +491,13 @@ async function executeToolCalls(
 async function resolveMessagesForStreaming(
   model: ChatModelWithTools,
   messages: BaseMessage[],
-  onStatusChange?: (payload: { stage: 'thinking' | 'tool' | 'reasoning'; text: string }) => void
+  onStatusChange?: (payload: { stage: 'thinking' | 'tool' | 'reasoning'; text: string }) => void,
+  signal?: AbortSignal
 ) {
   const currentMessages: BaseMessage[] = [...messages]
 
   for (let round = 0; round < MAX_TOOL_CALL_ROUNDS; round += 1) {
-    const result = await model.invoke(currentMessages)
+    const result = await model.invoke(currentMessages, signal ? { signal } : undefined)
     const toolCalls = extractToolCalls(result)
 
     if (!toolCalls.length) {
@@ -522,12 +524,13 @@ async function resolveMessagesForStreaming(
 async function* streamAssistantReplyWithTools(
   model: ChatModelWithTools,
   messages: BaseMessage[],
-  onStatusChange?: (payload: { stage: 'thinking' | 'tool' | 'reasoning'; text: string }) => void
+  onStatusChange?: (payload: { stage: 'thinking' | 'tool' | 'reasoning'; text: string }) => void,
+  signal?: AbortSignal
 ): AsyncGenerator<string, AIMessageChunk, void> {
   const currentMessages: BaseMessage[] = [...messages]
 
   for (let round = 0; round < MAX_TOOL_CALL_ROUNDS; round += 1) {
-    const stream = await model.stream(currentMessages)
+    const stream = await model.stream(currentMessages, signal ? { signal } : undefined)
     let fullChunk: AIMessageChunk | null = null
     let emittedTextInRound = false
 
@@ -557,7 +560,7 @@ async function* streamAssistantReplyWithTools(
           dayjs().format('HH:mm:ss')
         )
 
-        const resolvedResult = await model.invoke(currentMessages)
+        const resolvedResult = await model.invoke(currentMessages, signal ? { signal } : undefined)
         const resolvedToolCalls = extractToolCalls(resolvedResult)
 
         if (resolvedToolCalls.length) {
@@ -603,7 +606,8 @@ export async function* streamAssistantReply({
   memoryContext,
   conversationHistory,
   onStatusChange,
-  modelOverride
+  modelOverride,
+  signal
 }: GenerateAssistantReplyParams): AsyncGenerator<string, string, void> {
   const model = await getChatModel(modelOverride)
   const messages = buildLangChainMessages({
@@ -621,7 +625,12 @@ export async function* streamAssistantReply({
   })
 
   try {
-    for await (const delta of streamAssistantReplyWithTools(model, messages, onStatusChange)) {
+    for await (const delta of streamAssistantReplyWithTools(
+      model,
+      messages,
+      onStatusChange,
+      signal
+    )) {
       fullText += delta
       yield delta
     }
@@ -631,9 +640,14 @@ export async function* streamAssistantReply({
         '[resolve] 流式阶段未产出文本，进入 fallback tool-resolution + stream',
         dayjs().format('HH:mm:ss')
       )
-      const resolvedMessages = await resolveMessagesForStreaming(model, messages, onStatusChange)
+      const resolvedMessages = await resolveMessagesForStreaming(
+        model,
+        messages,
+        onStatusChange,
+        signal
+      )
 
-      const fallbackStream = await model.stream(resolvedMessages)
+      const fallbackStream = await model.stream(resolvedMessages, signal ? { signal } : undefined)
 
       for await (const chunk of fallbackStream) {
         const delta = normalizeContent(chunk.content)
@@ -647,7 +661,7 @@ export async function* streamAssistantReply({
       }
 
       if (!fullText.trim()) {
-        const fallbackResult = await model.invoke(resolvedMessages)
+        const fallbackResult = await model.invoke(resolvedMessages, signal ? { signal } : undefined)
         const fallbackContent = normalizeContent(fallbackResult.content)
 
         if (fallbackContent) {
