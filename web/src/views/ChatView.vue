@@ -2,21 +2,21 @@
   <div class="chat-layout">
     <button
       v-if="isMobile && isSidebarOpen"
-      class="chat-layout__backdrop"
+      class="chat-layout-backdrop"
       type="button"
       aria-label="关闭侧边菜单"
       @click="closeSidebar"
     ></button>
 
-    <aside class="chat-layout__sidebar" :class="{ 'chat-layout__sidebar--open': isSidebarOpen }">
-      <div class="chat-layout__brand">
+    <aside class="chat-layout-sidebar" :class="{ 'chat-layout-sidebar--open': isSidebarOpen }">
+      <div class="chat-layout-brand">
         <div>
-          <span class="chat-layout__eyebrow">Workspace</span>
+          <span class="chat-layout-eyebrow">Workspace</span>
           <h1>My Agent</h1>
         </div>
         <button
           v-if="isMobile"
-          class="chat-layout__icon-button"
+          class="chat-layout-icon-button"
           type="button"
           aria-label="关闭侧边菜单"
           @click="closeSidebar"
@@ -25,7 +25,7 @@
           <span></span>
         </button>
       </div>
-      <div class="chat-layout__conversation-tools">
+      <div class="chat-layout-conversation-tools">
         <el-input
           :model-value="conversationKeyword"
           placeholder="搜索会话"
@@ -41,8 +41,8 @@
         @toggle-pin="handleTogglePinConversation"
         @delete="handleDeleteConversation"
       />
-      <div class="chat-layout__model-selector"></div>
-      <div class="chat-layout__sidebar-actions">
+      <div class="chat-layout-model-selector"></div>
+      <div class="chat-layout-sidebar-actions">
         <el-select
           v-model="selectedModelId"
           placeholder="选择模型"
@@ -57,7 +57,7 @@
             :value="model.id"
           >
             <span>{{ model.name }}</span>
-            <span class="chat-layout__model-desc">{{ model.description }}</span>
+            <span class="chat-layout-model-desc">{{ model.description }}</span>
           </el-option>
         </el-select>
         <el-button plain @click="router.push('/memories')">管理记忆</el-button>
@@ -65,12 +65,12 @@
       </div>
     </aside>
 
-    <main class="chat-layout__main">
-      <header class="chat-layout__header">
-        <div class="chat-layout__header-main">
+    <main class="chat-layout-main">
+      <header class="chat-layout-header">
+        <div class="chat-layout-header-main">
           <button
             v-if="isMobile"
-            class="chat-layout__icon-button"
+            class="chat-layout-icon-button"
             type="button"
             aria-label="打开侧边菜单"
             @click="openSidebar"
@@ -80,16 +80,16 @@
             <span></span>
           </button>
           <div>
-            <span class="chat-layout__eyebrow">Active Conversation</span>
+            <span class="chat-layout-eyebrow">Active Conversation</span>
             <h2>{{ chatStore.activeConversation?.title || '未选择会话' }}</h2>
           </div>
         </div>
-        <span class="chat-layout__user">{{ authStore.user?.username }}</span>
+        <span class="chat-layout-user">{{ authStore.user?.username }}</span>
       </header>
 
-      <div class="chat-layout__content" ref="contentRef">
-        <div class="chat-layout__content-inner">
-          <section class="chat-layout__messages" :key="route.query.conversationId as string">
+      <div class="chat-layout-content" ref="contentRef">
+        <div class="chat-layout-content-inner">
+          <section class="chat-layout-messages" :key="route.query.conversationId as string">
             <MessageList
               :messages="chatStore.messages"
               :streaming="chatStore.isSending"
@@ -99,8 +99,8 @@
         </div>
       </div>
 
-      <footer class="chat-layout__composer">
-        <div class="chat-layout__composer__content">
+      <footer class="chat-layout-composer">
+        <div class="chat-layout-composer-content">
           <MessageComposer
             :loading="chatStore.isSending"
             :can-stop="chatStore.isSending"
@@ -348,248 +348,252 @@ async function handleLogout() {
   display: flex;
   position: relative;
   background: rgba(255, 255, 255, 0.16);
-}
 
-.chat-layout__sidebar {
-  background: rgba(255, 255, 255, 0.7);
-  border-right: 1px solid rgba(18, 52, 88, 0.08);
-  backdrop-filter: blur(18px);
-  width: 300px;
-  height: 100%;
-  display: flex;
-  flex-shrink: 0;
-  flex-direction: column;
-  position: relative;
-  z-index: 3;
-}
-
-.chat-layout__brand {
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.chat-layout__conversation-tools {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 16px 16px;
-  border-bottom: 1px solid rgba(18, 52, 88, 0.2);
-}
-
-.chat-layout__conversation-title {
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.chat-layout__brand h1,
-.chat-layout__header h2 {
-  margin: 0;
-}
-
-.chat-layout__eyebrow {
-  display: inline-block;
-  margin-bottom: 8px;
-  color: #8c5c2a;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.chat-layout__sidebar-actions {
-  padding: 16px;
-  display: grid;
-  gap: 10px;
-  box-shadow: 0px -3px 16px 0px rgb(210 210 210 / 50%);
-  .el-button {
-    width: 100%;
-    margin: 0px;
+  &-sidebar {
+    background: rgba(255, 255, 255, 0.7);
+    border-right: 1px solid rgba(18, 52, 88, 0.08);
+    backdrop-filter: blur(18px);
+    width: 300px;
+    height: 100%;
+    display: flex;
+    flex-shrink: 0;
+    flex-direction: column;
+    position: relative;
+    z-index: 3;
   }
-}
 
-.chat-layout__model-desc {
-  margin-left: 8px;
-  color: #999;
-  font-size: 12px;
-}
+  &-brand {
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
 
-.chat-layout__main {
-  flex: 1;
-  width: 0;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
+    h1 {
+      margin: 0;
+    }
+  }
 
-.chat-layout__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px;
-  border-bottom: 1px solid rgba(18, 52, 88, 0.2);
-}
+  &-conversation-tools {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 16px 16px;
+    border-bottom: 1px solid rgba(18, 52, 88, 0.2);
+  }
 
-.chat-layout__header-main {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+  &-conversation-title {
+    font-size: 18px;
+    font-weight: 600;
+  }
 
-.chat-layout__header-main > div {
-  min-width: 0;
-}
+  &-eyebrow {
+    display: inline-block;
+    margin-bottom: 8px;
+    color: #8c5c2a;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
 
-.chat-layout__header h2 {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+  &-sidebar-actions {
+    padding: 16px;
+    display: grid;
+    gap: 10px;
+    box-shadow: 0px -3px 16px 0px rgb(210 210 210 / 50%);
 
-.chat-layout__user {
-  padding: 10px 14px;
-  border-radius: 999px;
-  background: rgba(18, 52, 88, 0.08);
-  font-weight: 600;
-  white-space: nowrap;
-}
+    .el-button {
+      width: 100%;
+      margin: 0;
+    }
+  }
 
-.chat-layout__content {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 16px;
-  &::-webkit-scrollbar {
-    display: none;
+  &-model-desc {
+    margin-left: 8px;
+    color: #999;
+    font-size: 12px;
+  }
+
+  &-main {
+    flex: 1;
     width: 0;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
   }
-}
 
-.chat-layout__content-inner {
-  width: min(100%, var(--chat-content-max-width));
-  min-height: 100%;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-}
+  &-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px;
+    border-bottom: 1px solid rgba(18, 52, 88, 0.2);
 
-.chat-layout__messages {
-  flex: 1;
-  min-height: 0;
-}
+    h2 {
+      margin: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
 
-.chat-layout__composer {
-  padding: 0 16px 16px;
+  &-header-main {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 
-  .chat-layout__composer__content {
+    > div {
+      min-width: 0;
+    }
+  }
+
+  &-user {
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: rgba(18, 52, 88, 0.08);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  &-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px;
+
+    &::-webkit-scrollbar {
+      display: none;
+      width: 0;
+    }
+  }
+
+  &-content-inner {
+    width: min(100%, var(--chat-content-max-width));
+    min-height: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  &-messages {
+    flex: 1;
+    min-height: 0;
+  }
+
+  &-composer {
+    padding: 0 16px 16px;
+  }
+
+  &-composer-content {
     width: min(100%, var(--chat-content-max-width));
     margin: 0 auto;
   }
-}
 
-.chat-layout__backdrop {
-  position: absolute;
-  inset: 0;
-  border: 0;
-  padding: 0;
-  background: rgba(8, 15, 24, 0.38);
-  z-index: 2;
-}
+  &-backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    padding: 0;
+    background: rgba(8, 15, 24, 0.38);
+    z-index: 2;
+  }
 
-.chat-layout__icon-button {
-  width: 42px;
-  height: 42px;
-  display: inline-flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid rgba(18, 52, 88, 0.12);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #123458;
-  cursor: pointer;
-  flex-shrink: 0;
-}
+  &-icon-button {
+    width: 42px;
+    height: 42px;
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid rgba(18, 52, 88, 0.12);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.72);
+    color: #123458;
+    cursor: pointer;
+    flex-shrink: 0;
 
-.chat-layout__icon-button span {
-  width: 16px;
-  height: 2px;
-  border-radius: 999px;
-  background: currentColor;
+    span {
+      width: 16px;
+      height: 2px;
+      border-radius: 999px;
+      background: currentColor;
+    }
+  }
 }
 
 @media (max-width: 960px) {
   .chat-layout {
     display: block;
-  }
 
-  .chat-layout__main {
-    width: 100%;
-    height: 100%;
-  }
+    &-main {
+      width: 100%;
+      height: 100%;
+    }
 
-  .chat-layout__sidebar {
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: min(84vw, 320px);
-    max-width: 320px;
-    border-right: 1px solid rgba(18, 52, 88, 0.08);
-    box-shadow: 0 18px 50px rgba(18, 52, 88, 0.24);
-    transform: translateX(-100%);
-    transition: transform 0.24s ease;
-  }
+    &-sidebar {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: min(84vw, 320px);
+      max-width: 320px;
+      border-right: 1px solid rgba(18, 52, 88, 0.08);
+      box-shadow: 0 18px 50px rgba(18, 52, 88, 0.24);
+      transform: translateX(-100%);
+      transition: transform 0.24s ease;
 
-  .chat-layout__sidebar--open {
-    transform: translateX(0);
-  }
+      &--open {
+        transform: translateX(0);
+      }
+    }
 
-  .chat-layout__header {
-    align-items: center;
-    padding: 12px 16px;
-  }
+    &-header {
+      align-items: center;
+      padding: 12px 16px;
+    }
 
-  .chat-layout__user {
-    max-width: 42%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+    &-user {
+      max-width: 42%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
 
-  .chat-layout__messages {
-    min-height: 0;
-  }
+    &-messages {
+      min-height: 0;
+    }
 
-  .chat-layout__content {
-    padding: 0 14px;
-  }
+    &-content {
+      padding: 0 14px;
+    }
 
-  .chat-layout__content-inner {
-    padding-top: 16px;
-    padding-bottom: 16px;
+    &-content-inner {
+      padding-top: 16px;
+      padding-bottom: 16px;
+    }
   }
 }
 
 @media (max-width: 640px) {
-  .chat-layout__header {
-    gap: 12px;
-    align-items: flex-start;
-  }
+  .chat-layout {
+    &-header {
+      gap: 12px;
+      align-items: flex-start;
 
-  .chat-layout__header h2 {
-    font-size: 18px;
-    white-space: normal;
-  }
+      h2 {
+        font-size: 18px;
+        white-space: normal;
+      }
+    }
 
-  .chat-layout__user {
-    padding: 8px 12px;
-    font-size: 13px;
+    &-user {
+      padding: 8px 12px;
+      font-size: 13px;
+    }
   }
 }
 </style>

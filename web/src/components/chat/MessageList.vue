@@ -1,6 +1,6 @@
 <template>
   <div class="message-list">
-    <div v-if="messages.length === 0" class="message-list__empty">
+    <div v-if="messages.length === 0" class="message-list-empty">
       <h3>开始一段新对话</h3>
       <p>输入你的问题，系统会保存会话和消息历史。</p>
     </div>
@@ -11,27 +11,27 @@
         class="message-bubble"
         :class="`message-bubble--${message.role}`"
       >
-        <span class="message-bubble__role">
+        <span class="message-bubble-role">
           {{ roleLabelMap[message.role] }}
-          <span class="message-bubble__time">{{
+          <span class="message-bubble-time">{{
             dayjs(message.createdAt).format('YYYY-MM-DD HH:mm:ss')
           }}</span>
           <span
             v-if="message.role === 'assistant' && message.status !== 'completed'"
-            class="message-bubble__status"
+            class="message-bubble-status"
           >
             {{ messageStatusLabelMap[message.status] }}
           </span>
         </span>
         <div
-          class="message-bubble__content"
+          class="message-bubble-content"
           v-html="
             message.role !== 'user'
               ? renderedContent(message)
               : `<div style='white-space: pre-wrap;'>${message.content}</div>`
           "
         ></div>
-        <span v-if="showStreamingCursor(message)" class="message-bubble__cursor"></span>
+        <span v-if="showStreamingCursor(message)" class="message-bubble-cursor"></span>
       </article>
       <article
         v-if="showThinkingBubble"
@@ -39,15 +39,15 @@
         aria-live="polite"
         aria-busy="true"
       >
-        <span class="message-bubble__role">
+        <span class="message-bubble-role">
           {{ roleLabelMap.assistant }}
-          <span class="message-bubble__time">思考中...</span>
+          <span class="message-bubble-time">思考中...</span>
         </span>
-        <div class="message-bubble__thinking">
-          <span class="message-bubble__thinking-text">{{
+        <div class="message-bubble-thinking">
+          <span class="message-bubble-thinking-text">{{
             props.thinkingText || '正在整理回答'
           }}</span>
-          <span class="message-bubble__thinking-dots" aria-hidden="true">
+          <span class="message-bubble-thinking-dots" aria-hidden="true">
             <i></i>
             <i></i>
             <i></i>
@@ -113,14 +113,14 @@ function renderedContent(message: Message) {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
 
-.message-list__empty {
-  display: grid;
-  padding-top: 200px;
-  place-items: center;
-  text-align: center;
-  color: #5f6774;
+  &-empty {
+    display: grid;
+    padding-top: 200px;
+    place-items: center;
+    text-align: center;
+    color: #5f6774;
+  }
 }
 
 .message-bubble {
@@ -130,184 +130,184 @@ function renderedContent(message: Message) {
   border-radius: 20px;
   background: #d3e5ff;
   color: #142235;
-}
 
-.message-bubble--user {
-  margin-left: auto;
-  background: #123458;
-  color: #fff;
-}
+  &--user {
+    margin-left: auto;
+    background: #123458;
+    color: #fff;
+  }
 
-.message-bubble--assistant {
-  margin-right: auto;
-}
+  &--assistant {
+    margin-right: auto;
+  }
 
-.message-bubble--thinking {
-  min-width: 220px;
-}
+  &--thinking {
+    min-width: 220px;
+  }
 
-.message-bubble--system {
-  margin: 0 auto;
-  background: #fff2cf;
-}
+  &--system {
+    margin: 0 auto;
+    background: #fff2cf;
+  }
 
-.message-bubble__role {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  user-select: none;
-}
+  &-role {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    user-select: none;
+  }
 
-.message-bubble__time {
-  color: #888888;
-  font-size: 10px;
-}
+  &-time {
+    color: #888888;
+    font-size: 10px;
+  }
 
-.message-bubble__status {
-  margin-left: 8px;
-  color: #8c5c2a;
-  font-size: 10px;
-}
+  &-status {
+    margin-left: 8px;
+    color: #8c5c2a;
+    font-size: 10px;
+  }
 
-.message-bubble__content {
-  line-height: 1.7;
-  overflow-wrap: anywhere;
-}
+  &-content {
+    line-height: 1.7;
+    overflow-wrap: anywhere;
 
-.message-bubble__content :deep(:first-child) {
-  margin-top: 0;
-}
+    :deep(:first-child) {
+      margin-top: 0;
+    }
 
-.message-bubble__content :deep(:last-child) {
-  margin-bottom: 0;
-}
+    :deep(:last-child) {
+      margin-bottom: 0;
+    }
 
-.message-bubble__content :deep(p) {
-  margin: 0 0 0.85em;
-}
+    :deep(p) {
+      margin: 0 0 0.85em;
+    }
 
-.message-bubble__content :deep(ul),
-.message-bubble__content :deep(ol) {
-  margin: 0 0 0.85em;
-  padding-left: 1.5em;
-}
+    :deep(ul),
+    :deep(ol) {
+      margin: 0 0 0.85em;
+      padding-left: 1.5em;
+    }
 
-.message-bubble__content :deep(li + li) {
-  margin-top: 0.35em;
-}
+    :deep(li + li) {
+      margin-top: 0.35em;
+    }
 
-.message-bubble__content :deep(blockquote) {
-  margin: 0 0 0.85em;
-  padding: 0.75em 1em;
-  border-left: 4px solid rgba(18, 52, 88, 0.18);
-  background: rgba(18, 52, 88, 0.05);
-  border-radius: 0 12px 12px 0;
-}
+    :deep(blockquote) {
+      margin: 0 0 0.85em;
+      padding: 0.75em 1em;
+      border-left: 4px solid rgba(18, 52, 88, 0.18);
+      background: rgba(18, 52, 88, 0.05);
+      border-radius: 0 12px 12px 0;
+    }
 
-.message-bubble__content :deep(pre) {
-  margin: 0 0 0.85em;
-  padding: 14px 16px;
-  overflow-x: auto;
-  border-radius: 14px;
-  background: rgba(12, 23, 40, 0.92);
-  color: #f5f7fa;
-}
+    :deep(pre) {
+      margin: 0 0 0.85em;
+      padding: 14px 16px;
+      overflow-x: auto;
+      border-radius: 14px;
+      background: rgba(12, 23, 40, 0.92);
+      color: #f5f7fa;
+    }
 
-.message-bubble__content :deep(code) {
-  padding: 0.15em 0.35em;
-  border-radius: 6px;
-  background: rgba(18, 52, 88, 0.08);
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-  font-size: 0.95em;
-}
+    :deep(code) {
+      padding: 0.15em 0.35em;
+      border-radius: 6px;
+      background: rgba(18, 52, 88, 0.08);
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 0.95em;
+    }
 
-.message-bubble__content :deep(pre code) {
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  color: inherit;
-  font-size: 0.92em;
-}
+    :deep(pre code) {
+      padding: 0;
+      border-radius: 0;
+      background: transparent;
+      color: inherit;
+      font-size: 0.92em;
+    }
 
-.message-bubble__content :deep(table) {
-  display: block;
-  width: 100%;
-  margin: 0 0 0.85em;
-  overflow-x: auto;
-  border-collapse: collapse;
-}
+    :deep(table) {
+      display: block;
+      width: 100%;
+      margin: 0 0 0.85em;
+      overflow-x: auto;
+      border-collapse: collapse;
+    }
 
-.message-bubble__content :deep(th),
-.message-bubble__content :deep(td) {
-  padding: 10px 12px;
-  border: 1px solid rgba(18, 52, 88, 0.14);
-  text-align: left;
-  vertical-align: top;
-}
+    :deep(th),
+    :deep(td) {
+      padding: 10px 12px;
+      border: 1px solid rgba(18, 52, 88, 0.14);
+      text-align: left;
+      vertical-align: top;
+    }
 
-.message-bubble__content :deep(th) {
-  background: rgba(18, 52, 88, 0.06);
-  font-weight: 700;
-}
+    :deep(th) {
+      background: rgba(18, 52, 88, 0.06);
+      font-weight: 700;
+    }
 
-.message-bubble__content :deep(hr) {
-  margin: 1em 0;
-  border: 0;
-  border-top: 1px solid rgba(18, 52, 88, 0.16);
-}
+    :deep(hr) {
+      margin: 1em 0;
+      border: 0;
+      border-top: 1px solid rgba(18, 52, 88, 0.16);
+    }
 
-.message-bubble__content :deep(a) {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
+    :deep(a) {
+      color: inherit;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+  }
 
-.message-bubble__cursor {
-  display: inline-block;
-  width: 0.7ch;
-  height: 1.1em;
-  margin-left: 2px;
-  transform: translateY(2px);
-  background: currentColor;
-  animation: blink 1s steps(1) infinite;
-}
+  &-cursor {
+    display: inline-block;
+    width: 0.7ch;
+    height: 1.1em;
+    margin-left: 2px;
+    transform: translateY(2px);
+    background: currentColor;
+    animation: blink 1s steps(1) infinite;
+  }
 
-.message-bubble__thinking {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
+  &-thinking {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
 
-.message-bubble__thinking-text {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
+  &-thinking-text {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
 
-.message-bubble__thinking-dots {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
+  &-thinking-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 
-.message-bubble__thinking-dots i {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: 0.35;
-  animation: pulse 1.2s ease-in-out infinite;
-}
+    i {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: currentColor;
+      opacity: 0.35;
+      animation: pulse 1.2s ease-in-out infinite;
 
-.message-bubble__thinking-dots i:nth-child(2) {
-  animation-delay: 0.15s;
-}
+      &:nth-child(2) {
+        animation-delay: 0.15s;
+      }
 
-.message-bubble__thinking-dots i:nth-child(3) {
-  animation-delay: 0.3s;
+      &:nth-child(3) {
+        animation-delay: 0.3s;
+      }
+    }
+  }
 }
 
 @keyframes blink {

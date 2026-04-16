@@ -1,6 +1,6 @@
 <template>
   <div class="conversation-list">
-    <div class="conversation-list__scroll">
+    <div class="conversation-list-scroll">
       <template v-if="conversations.length > 0">
         <div
           v-for="conversation in conversations"
@@ -10,11 +10,11 @@
           @click="$emit('select', conversation.id)"
         >
           <div class="conversation-item-left">
-            <div class="conversation-item__title-row">
-              <span v-if="conversation.isPinned" class="conversation-item__pin-tag">已置顶</span>
-              <span class="conversation-item__title">{{ conversation.title }}</span>
+            <div class="conversation-item-title-row">
+              <span v-if="conversation.isPinned" class="conversation-item-pin-tag">已置顶</span>
+              <span class="conversation-item-title">{{ conversation.title }}</span>
             </div>
-            <span class="conversation-item__preview">{{
+            <span class="conversation-item-preview">{{
               conversation.lastMessagePreview || '暂无消息'
             }}</span>
           </div>
@@ -34,7 +34,7 @@
           </div>
         </div>
       </template>
-      <div v-else class="conversation-list__empty">没有匹配的会话</div>
+      <div v-else class="conversation-list-empty">没有匹配的会话</div>
     </div>
   </div>
 </template>
@@ -80,22 +80,22 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
   flex-direction: column;
   flex: 1;
   overflow: hidden;
-}
 
-.conversation-list__scroll {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-  overflow-y: auto;
-}
+  &-scroll {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px;
+    overflow-y: auto;
+  }
 
-.conversation-list__empty {
-  padding: 12px;
-  text-align: center;
-  color: #7b8594;
-  font-size: 13px;
+  &-empty {
+    padding: 12px;
+    text-align: center;
+    color: #7b8594;
+    font-size: 13px;
+  }
 }
 
 .conversation-item {
@@ -128,64 +128,66 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
       font-size: 14px;
     }
   }
-}
 
-.conversation-item__title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.conversation-item-right {
-  .el-button {
-    padding: 0 6px;
-    margin: 0px;
-  }
-}
-
-.conversation-item:hover {
-  .conversation-item-right {
+  &-title-row {
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 8px;
+    min-width: 0;
   }
-}
 
-.conversation-item--active {
-  background: rgba(174, 213, 255, 0.517);
-}
+  &-right {
+    .el-button {
+      padding: 0 6px;
+      margin: 0;
+    }
+  }
 
-.conversation-item__title {
-  font-weight: 600;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
+  &:hover {
+    .conversation-item-right {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  }
 
-.conversation-item__pin-tag {
-  flex-shrink: 0;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(140, 92, 42, 0.12);
-  color: #8c5c2a;
-  font-size: 12px;
-  line-height: 1.4;
-}
+  &--active {
+    background: rgba(174, 213, 255, 0.517);
+  }
 
-.conversation-item__preview {
-  color: #5f6774;
-  font-size: 12px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  &-title {
+    font-weight: 600;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  &-pin-tag {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(140, 92, 42, 0.12);
+    color: #8c5c2a;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  &-preview {
+    color: #5f6774;
+    font-size: 12px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
 }
 
 @media (hover: none), (max-width: 960px) {
-  .conversation-item-right {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .conversation-item {
+    &-right {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
   }
 }
 </style>
