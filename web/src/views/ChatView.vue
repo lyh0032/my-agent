@@ -1,118 +1,3 @@
-<template>
-  <div class="chat-layout">
-    <button
-      v-if="isMobile && isSidebarOpen"
-      class="chat-layout-backdrop"
-      type="button"
-      aria-label="关闭侧边菜单"
-      @click="closeSidebar"
-    ></button>
-
-    <aside class="chat-layout-sidebar" :class="{ 'chat-layout-sidebar--open': isSidebarOpen }">
-      <div class="chat-layout-brand">
-        <div>
-          <span class="chat-layout-eyebrow">Workspace</span>
-          <h1>My Agent</h1>
-        </div>
-        <button
-          v-if="isMobile"
-          class="chat-layout-icon-button"
-          type="button"
-          aria-label="关闭侧边菜单"
-          @click="closeSidebar"
-        >
-          <span></span>
-          <span></span>
-        </button>
-      </div>
-      <div class="chat-layout-conversation-tools">
-        <el-input
-          :model-value="conversationKeyword"
-          placeholder="搜索会话"
-          clearable
-          @update:model-value="handleConversationKeywordChange"
-        />
-        <el-button :icon="Plus" circle @click="handleCreateConversation"></el-button>
-      </div>
-      <ConversationList
-        :conversations="filteredConversations"
-        :active-conversation-id="chatStore.activeConversationId"
-        @select="handleSelectConversation"
-        @toggle-pin="handleTogglePinConversation"
-        @delete="handleDeleteConversation"
-      />
-      <div class="chat-layout-model-selector"></div>
-      <div class="chat-layout-sidebar-actions">
-        <el-select
-          v-model="selectedModelId"
-          placeholder="选择模型"
-          size="default"
-          :loading="isLoadingModels"
-          @change="handleModelChange"
-        >
-          <el-option
-            v-for="model in availableModels"
-            :key="model.id"
-            :label="model.name"
-            :value="model.id"
-          >
-            <span>{{ model.name }}</span>
-            <span class="chat-layout-model-desc">{{ model.description }}</span>
-          </el-option>
-        </el-select>
-        <el-button plain @click="router.push('/memories')">管理记忆</el-button>
-        <el-button @click="handleLogout">退出登录</el-button>
-      </div>
-    </aside>
-
-    <main class="chat-layout-main">
-      <header class="chat-layout-header">
-        <div class="chat-layout-header-main">
-          <button
-            v-if="isMobile"
-            class="chat-layout-icon-button"
-            type="button"
-            aria-label="打开侧边菜单"
-            @click="openSidebar"
-          >
-            <span></span>
-            <span></span>
-            <span></span>
-          </button>
-          <div>
-            <span class="chat-layout-eyebrow">Active Conversation</span>
-            <h2>{{ chatStore.activeConversation?.title || '未选择会话' }}</h2>
-          </div>
-        </div>
-        <span class="chat-layout-user">{{ authStore.user?.username }}</span>
-      </header>
-
-      <div class="chat-layout-content" ref="contentRef">
-        <div class="chat-layout-content-inner">
-          <section class="chat-layout-messages" :key="route.query.conversationId as string">
-            <MessageList
-              :messages="chatStore.messages"
-              :streaming="chatStore.isSending"
-              :thinking-text="chatStore.streamingStatusText"
-            />
-          </section>
-        </div>
-      </div>
-
-      <footer class="chat-layout-composer">
-        <div class="chat-layout-composer-content">
-          <MessageComposer
-            :loading="chatStore.isSending"
-            :can-stop="chatStore.isSending"
-            @submit="handleSendMessage"
-            @cancel="handleStopStreaming"
-          />
-        </div>
-      </footer>
-    </main>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, watch, ref, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -337,6 +222,121 @@ async function handleLogout() {
 }
 </script>
 
+<template>
+  <div class="chat-layout">
+    <button
+      v-if="isMobile && isSidebarOpen"
+      class="chat-layout-backdrop"
+      type="button"
+      aria-label="关闭侧边菜单"
+      @click="closeSidebar"
+    ></button>
+
+    <aside class="chat-layout-sidebar" :class="{ 'chat-layout-sidebar--open': isSidebarOpen }">
+      <div class="chat-layout-brand">
+        <div>
+          <span class="chat-layout-eyebrow">Workspace</span>
+          <h1>My Agent</h1>
+        </div>
+        <button
+          v-if="isMobile"
+          class="chat-layout-icon-button"
+          type="button"
+          aria-label="关闭侧边菜单"
+          @click="closeSidebar"
+        >
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+      <div class="chat-layout-conversation-tools">
+        <el-input
+          :model-value="conversationKeyword"
+          placeholder="搜索会话"
+          clearable
+          @update:model-value="handleConversationKeywordChange"
+        />
+        <el-button :icon="Plus" circle @click="handleCreateConversation"></el-button>
+      </div>
+      <ConversationList
+        :conversations="filteredConversations"
+        :active-conversation-id="chatStore.activeConversationId"
+        @select="handleSelectConversation"
+        @toggle-pin="handleTogglePinConversation"
+        @delete="handleDeleteConversation"
+      />
+      <div class="chat-layout-model-selector"></div>
+      <div class="chat-layout-sidebar-actions">
+        <el-select
+          v-model="selectedModelId"
+          placeholder="选择模型"
+          size="default"
+          :loading="isLoadingModels"
+          @change="handleModelChange"
+        >
+          <el-option
+            v-for="model in availableModels"
+            :key="model.id"
+            :label="model.name"
+            :value="model.id"
+          >
+            <span>{{ model.name }}</span>
+            <span class="chat-layout-model-desc">{{ model.description }}</span>
+          </el-option>
+        </el-select>
+        <el-button plain @click="router.push('/memories')">管理记忆</el-button>
+        <el-button @click="handleLogout">退出登录</el-button>
+      </div>
+    </aside>
+
+    <main class="chat-layout-main">
+      <header class="chat-layout-header">
+        <div class="chat-layout-header-main">
+          <button
+            v-if="isMobile"
+            class="chat-layout-icon-button"
+            type="button"
+            aria-label="打开侧边菜单"
+            @click="openSidebar"
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+          <div>
+            <span class="chat-layout-eyebrow">Active Conversation</span>
+            <h2>{{ chatStore.activeConversation?.title || '未选择会话' }}</h2>
+          </div>
+        </div>
+        <span class="chat-layout-user">{{ authStore.user?.username }}</span>
+      </header>
+
+      <div class="chat-layout-content" ref="contentRef">
+        <div class="chat-layout-content-inner">
+          <section class="chat-layout-messages" :key="route.query.conversationId as string">
+            <MessageList
+              :messages="chatStore.messages"
+              :streaming="chatStore.isSending"
+              :thinking-text="chatStore.streamingStatusText"
+            />
+          </section>
+        </div>
+      </div>
+
+      <footer class="chat-layout-composer">
+        <div class="chat-layout-composer-content">
+          <MessageComposer
+            :loading="chatStore.isSending"
+            :can-stop="chatStore.isSending"
+            @submit="handleSendMessage"
+            @cancel="handleStopStreaming"
+          />
+        </div>
+      </footer>
+    </main>
+  </div>
+</template>
+
 <style scoped lang="less">
 .chat-layout {
   --chat-content-max-width: 800px;
@@ -484,6 +484,7 @@ async function handleLogout() {
   &-messages {
     flex: 1;
     min-height: 0;
+    position: relative;
   }
 
   &-composer {

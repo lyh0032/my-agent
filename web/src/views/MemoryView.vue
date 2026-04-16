@@ -1,3 +1,100 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+
+import { useMemoryStore } from '../stores/memory'
+import type { MemoryType } from '../types/memory'
+
+const router = useRouter()
+const memoryStore = useMemoryStore()
+const isMobile = ref(false)
+const isSidebarOpen = ref(false)
+
+const MOBILE_BREAKPOINT = 960
+
+const memoryTypeLabelMap: Record<MemoryType, string> = {
+  profile: '个人信息',
+  preference: '偏好',
+  summary: '总结',
+  fact: '事实'
+}
+
+const memoryStats = computed(() => {
+  const counts = memoryStore.memories.reduce<Record<MemoryType, number>>(
+    (result, memory) => {
+      result[memory.type] += 1
+      return result
+    },
+    {
+      profile: 0,
+      preference: 0,
+      summary: 0,
+      fact: 0
+    }
+  )
+
+  return (Object.keys(memoryTypeLabelMap) as MemoryType[]).map((type) => ({
+    type,
+    label: memoryTypeLabelMap[type],
+    count: counts[type]
+  }))
+})
+
+onMounted(async () => {
+  syncViewport()
+  window.addEventListener('resize', syncViewport)
+  await memoryStore.loadMemories({})
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', syncViewport)
+})
+
+function syncViewport() {
+  const mobile = window.innerWidth <= MOBILE_BREAKPOINT
+  isMobile.value = mobile
+  isSidebarOpen.value = !mobile
+}
+
+function openSidebar() {
+  isSidebarOpen.value = true
+}
+
+function closeSidebar() {
+  if (isMobile.value) {
+    isSidebarOpen.value = false
+  }
+}
+
+async function handleDelete(memoryId: string) {
+  try {
+    await ElMessageBox.confirm('删除后不可恢复，确认删除这条长期记忆吗？', '删除记忆', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消'
+    })
+
+    await memoryStore.deleteMemory(memoryId)
+    ElMessage.success('记忆已删除')
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除记忆失败')
+    }
+  }
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(value))
+}
+</script>
+
 <template>
   <div class="memory-layout">
     <button
@@ -104,103 +201,6 @@
     </main>
   </div>
 </template>
-
-<script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-
-import { useMemoryStore } from '../stores/memory'
-import type { MemoryType } from '../types/memory'
-
-const router = useRouter()
-const memoryStore = useMemoryStore()
-const isMobile = ref(false)
-const isSidebarOpen = ref(false)
-
-const MOBILE_BREAKPOINT = 960
-
-const memoryTypeLabelMap: Record<MemoryType, string> = {
-  profile: '个人信息',
-  preference: '偏好',
-  summary: '总结',
-  fact: '事实'
-}
-
-const memoryStats = computed(() => {
-  const counts = memoryStore.memories.reduce<Record<MemoryType, number>>(
-    (result, memory) => {
-      result[memory.type] += 1
-      return result
-    },
-    {
-      profile: 0,
-      preference: 0,
-      summary: 0,
-      fact: 0
-    }
-  )
-
-  return (Object.keys(memoryTypeLabelMap) as MemoryType[]).map((type) => ({
-    type,
-    label: memoryTypeLabelMap[type],
-    count: counts[type]
-  }))
-})
-
-onMounted(async () => {
-  syncViewport()
-  window.addEventListener('resize', syncViewport)
-  await memoryStore.loadMemories({})
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', syncViewport)
-})
-
-function syncViewport() {
-  const mobile = window.innerWidth <= MOBILE_BREAKPOINT
-  isMobile.value = mobile
-  isSidebarOpen.value = !mobile
-}
-
-function openSidebar() {
-  isSidebarOpen.value = true
-}
-
-function closeSidebar() {
-  if (isMobile.value) {
-    isSidebarOpen.value = false
-  }
-}
-
-async function handleDelete(memoryId: string) {
-  try {
-    await ElMessageBox.confirm('删除后不可恢复，确认删除这条长期记忆吗？', '删除记忆', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消'
-    })
-
-    await memoryStore.deleteMemory(memoryId)
-    ElMessage.success('记忆已删除')
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除记忆失败')
-    }
-  }
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(new Date(value))
-}
-</script>
 
 <style scoped lang="less">
 .memory-layout {

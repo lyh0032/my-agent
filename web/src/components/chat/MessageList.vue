@@ -1,63 +1,3 @@
-<template>
-  <div class="message-list">
-    <div v-if="messages.length === 0" class="message-list-empty">
-      <h3>开始一段新对话</h3>
-      <p>输入你的问题，系统会保存会话和消息历史。</p>
-    </div>
-    <template v-else>
-      <article
-        v-for="message in messages"
-        :key="message.id"
-        class="message-bubble"
-        :class="`message-bubble--${message.role}`"
-      >
-        <span class="message-bubble-role">
-          {{ roleLabelMap[message.role] }}
-          <span class="message-bubble-time">{{
-            dayjs(message.createdAt).format('YYYY-MM-DD HH:mm:ss')
-          }}</span>
-          <span
-            v-if="message.role === 'assistant' && message.status !== 'completed'"
-            class="message-bubble-status"
-          >
-            {{ messageStatusLabelMap[message.status] }}
-          </span>
-        </span>
-        <div
-          class="message-bubble-content"
-          v-html="
-            message.role !== 'user'
-              ? renderedContent(message)
-              : `<div style='white-space: pre-wrap;'>${message.content}</div>`
-          "
-        ></div>
-        <span v-if="showStreamingCursor(message)" class="message-bubble-cursor"></span>
-      </article>
-      <article
-        v-if="showThinkingBubble"
-        class="message-bubble message-bubble--assistant message-bubble--thinking"
-        aria-live="polite"
-        aria-busy="true"
-      >
-        <span class="message-bubble-role">
-          {{ roleLabelMap.assistant }}
-          <span class="message-bubble-time">思考中...</span>
-        </span>
-        <div class="message-bubble-thinking">
-          <span class="message-bubble-thinking-text">{{
-            props.thinkingText || '正在整理回答'
-          }}</span>
-          <span class="message-bubble-thinking-dots" aria-hidden="true">
-            <i></i>
-            <i></i>
-            <i></i>
-          </span>
-        </div>
-      </article>
-    </template>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Message } from '../../types/chat'
@@ -105,7 +45,75 @@ function renderedContent(message: Message) {
 }
 </script>
 
+<template>
+  <div v-if="messages.length === 0" class="message-empty">
+    <h3>开始一段新对话</h3>
+    <p>输入你的问题，系统会保存会话和消息历史。</p>
+  </div>
+  <div v-else class="message-list">
+    <article
+      v-for="message in messages"
+      :key="message.id"
+      class="message-bubble"
+      :class="`message-bubble--${message.role}`"
+    >
+      <span class="message-bubble-role">
+        {{ roleLabelMap[message.role] }}
+        <span class="message-bubble-time">{{
+          dayjs(message.createdAt).format('YYYY-MM-DD HH:mm:ss')
+        }}</span>
+        <span
+          v-if="message.role === 'assistant' && message.status !== 'completed'"
+          class="message-bubble-status"
+        >
+          {{ messageStatusLabelMap[message.status] }}
+        </span>
+      </span>
+      <div
+        class="message-bubble-content"
+        v-html="
+          message.role !== 'user'
+            ? renderedContent(message)
+            : `<div style='white-space: pre-wrap;'>${message.content}</div>`
+        "
+      ></div>
+      <span v-if="showStreamingCursor(message)" class="message-bubble-cursor"></span>
+    </article>
+    <article
+      v-if="showThinkingBubble"
+      class="message-bubble message-bubble--assistant message-bubble--thinking"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <span class="message-bubble-role">
+        {{ roleLabelMap.assistant }}
+        <span class="message-bubble-time">思考中...</span>
+      </span>
+      <div class="message-bubble-thinking">
+        <span class="message-bubble-thinking-text">{{ props.thinkingText || '正在整理回答' }}</span>
+        <span class="message-bubble-thinking-dots" aria-hidden="true">
+          <i></i>
+          <i></i>
+          <i></i>
+        </span>
+      </div>
+    </article>
+  </div>
+</template>
+
 <style scoped lang="less">
+.message-empty {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  color: #5f6774;
+  position: absolute;
+  width: 100%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
 .message-list {
   width: 100%;
   min-height: 100%;
@@ -113,14 +121,6 @@ function renderedContent(message: Message) {
   display: flex;
   flex-direction: column;
   gap: 16px;
-
-  &-empty {
-    display: grid;
-    padding-top: 200px;
-    place-items: center;
-    text-align: center;
-    color: #5f6774;
-  }
 }
 
 .message-bubble {

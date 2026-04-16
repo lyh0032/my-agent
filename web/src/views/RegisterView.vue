@@ -1,3 +1,29 @@
+<script setup lang="ts">
+import { reactive } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
+
+import { useAuthStore } from '../stores/auth'
+
+const authStore = useAuthStore()
+const router = useRouter()
+
+const form = reactive({
+  email: '',
+  username: '',
+  password: ''
+})
+
+async function handleSubmit() {
+  await authStore.register({
+    email: form.email.trim(),
+    username: form.username.trim(),
+    password: form.password
+  })
+
+  await router.push('/chat')
+}
+</script>
+
 <template>
   <div class="auth-page">
     <el-card class="auth-card" shadow="never">
@@ -25,32 +51,6 @@
     </el-card>
   </div>
 </template>
-
-<script setup lang="ts">
-import { reactive } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
-
-import { useAuthStore } from '../stores/auth'
-
-const authStore = useAuthStore()
-const router = useRouter()
-
-const form = reactive({
-  email: '',
-  username: '',
-  password: ''
-})
-
-async function handleSubmit() {
-  await authStore.register({
-    email: form.email.trim(),
-    username: form.username.trim(),
-    password: form.password
-  })
-
-  await router.push('/chat')
-}
-</script>
 
 <style scoped lang="less">
 .auth-page {

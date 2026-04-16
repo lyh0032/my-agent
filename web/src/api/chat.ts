@@ -7,8 +7,8 @@ import type {
   Message,
   StreamAssistantStatus
 } from '../types/chat'
-import { clearStoredToken, getStoredToken } from '../utils/token'
-import { apiBaseUrl, http } from './http'
+import { ensureFetchResponseOk, fetchWithAuth, http } from './http'
+import { consumeSseStream, type SseEvent } from './sse'
 
 type StreamMessageHandlers = {
   onUserMessage?: (message: Message) => void
@@ -24,60 +24,70 @@ type StreamMessageHandlers = {
   }) => void
 }
 
-type ParsedSseEvent = {
-  event: string
-  data: unknown
+type StreamState = {
+  latestConversationId: string
+  latestAssistantMessageId: string
 }
 
-function findSseBoundary(buffer: string): { index: number; length: number } | null {
-  const crlfBoundaryIndex = buffer.indexOf('\r\n\r\n')
+function applyStreamEvent(
+  parsed: SseEvent,
+  handlers: StreamMessageHandlers,
+  state: StreamState,
+  fallbackMessage: string
+) {
+  if (parsed.event === 'user-message' && parsed.data) {
+    handlers.onUserMessage?.(parsed.data as Message)
+    return
+  }
 
-  if (crlfBoundaryIndex >= 0) {
-    return {
-      index: crlfBoundaryIndex,
-      length: 4
+  if (parsed.event === 'assistant-message' && parsed.data) {
+    const assistantMessage = parsed.data as Message
+    state.latestAssistantMessageId = assistantMessage.id
+    handlers.onAssistantMessage?.(assistantMessage)
+    return
+  }
+
+  if (parsed.event === 'assistant-status' && parsed.data) {
+    handlers.onAssistantStatus?.(parsed.data as StreamAssistantStatus)
+    return
+  }
+
+  if (parsed.event === 'assistant-delta' && parsed.data) {
+    handlers.onAssistantDelta?.((parsed.data as { delta: string }).delta)
+    return
+  }
+
+  if (parsed.event === 'assistant-done' && parsed.data) {
+    const payload = parsed.data as { assistantMessage: Message; conversationId: string }
+    state.latestConversationId = payload.conversationId
+    state.latestAssistantMessageId = payload.assistantMessage.id
+    handlers.onAssistantDone?.(payload)
+    return
+  }
+
+  if (parsed.event === 'assistant-cancelled' && parsed.data) {
+    const payload = parsed.data as { assistantMessage: Message; conversationId: string }
+    state.latestConversationId = payload.conversationId
+    state.latestAssistantMessageId = payload.assistantMessage.id
+    handlers.onAssistantCancelled?.(payload)
+    return
+  }
+
+  if (parsed.event === 'assistant-failed' && parsed.data) {
+    const payload = parsed.data as {
+      assistantMessage: Message
+      conversationId: string
+      message: string
     }
+    state.latestConversationId = payload.conversationId
+    state.latestAssistantMessageId = payload.assistantMessage.id
+    handlers.onAssistantFailed?.(payload)
+    return
   }
 
-  const lfBoundaryIndex = buffer.indexOf('\n\n')
-
-  if (lfBoundaryIndex >= 0) {
-    return {
-      index: lfBoundaryIndex,
-      length: 2
-    }
-  }
-
-  return null
-}
-
-function parseSseEvent(chunk: string): ParsedSseEvent | null {
-  const lines = chunk.split(/\r?\n/).filter(Boolean)
-
-  if (lines.length === 0) {
-    return null
-  }
-
-  const event =
-    lines
-      .find((line) => line.startsWith('event:'))
-      ?.slice(6)
-      .trim() ?? 'message'
-  const dataText = lines
-    .filter((line) => line.startsWith('data:'))
-    .map((line) => line.slice(5).trim())
-    .join('\n')
-
-  return {
-    event,
-    data: dataText ? JSON.parse(dataText) : null
-  }
-}
-
-function handleAuthFailure() {
-  clearStoredToken()
-  if (window.location.pathname !== '/login') {
-    window.location.href = '/login'
+  if (parsed.event === 'error' && parsed.data) {
+    const payload = parsed.data as { message?: string }
+    throw new Error(payload.message || fallbackMessage)
   }
 }
 
@@ -154,145 +164,30 @@ export async function streamMessage(
   handlers: StreamMessageHandlers,
   signal?: AbortSignal
 ): Promise<{ conversationId: string; assistantMessageId?: string }> {
-  const token = getStoredToken()
-  const response = await fetch(`${apiBaseUrl}/conversations/${conversationId}/messages/stream`, {
+  const state: StreamState = {
+    latestConversationId: conversationId,
+    latestAssistantMessageId: ''
+  }
+
+  const response = await fetchWithAuth(`/conversations/${conversationId}/messages/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
+      Accept: 'text/event-stream'
     },
     body: JSON.stringify(input),
     signal
   })
 
-  if (response.status === 401) {
-    handleAuthFailure()
-    throw new Error('未登录或登录已过期')
-  }
+  await ensureFetchResponseOk(response, '流式请求失败')
 
-  if (!response.ok || !response.body) {
-    const text = await response.text()
-    throw new Error(text || '流式请求失败')
-  }
-
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  let latestConversationId = conversationId
-  let latestAssistantMessageId = ''
-
-  while (true) {
-    const { done, value } = await reader.read()
-
-    if (done) {
-      buffer += decoder.decode()
-      break
-    }
-
-    buffer += decoder.decode(value, { stream: true })
-
-    while (true) {
-      const boundary = findSseBoundary(buffer)
-
-      if (!boundary) {
-        break
-      }
-
-      const rawEvent = buffer.slice(0, boundary.index)
-      buffer = buffer.slice(boundary.index + boundary.length)
-
-      const parsed = parseSseEvent(rawEvent)
-
-      if (!parsed) {
-        continue
-      }
-
-      if (parsed.event === 'user-message' && parsed.data) {
-        handlers.onUserMessage?.(parsed.data as Message)
-      }
-
-      if (parsed.event === 'assistant-message' && parsed.data) {
-        const assistantMessage = parsed.data as Message
-        latestAssistantMessageId = assistantMessage.id
-        handlers.onAssistantMessage?.(assistantMessage)
-      }
-
-      if (parsed.event === 'assistant-status' && parsed.data) {
-        handlers.onAssistantStatus?.(parsed.data as StreamAssistantStatus)
-      }
-
-      if (parsed.event === 'assistant-delta' && parsed.data) {
-        handlers.onAssistantDelta?.((parsed.data as { delta: string }).delta)
-      }
-
-      if (parsed.event === 'assistant-done' && parsed.data) {
-        const payload = parsed.data as { assistantMessage: Message; conversationId: string }
-        latestConversationId = payload.conversationId
-        latestAssistantMessageId = payload.assistantMessage.id
-        handlers.onAssistantDone?.(payload)
-      }
-
-      if (parsed.event === 'assistant-cancelled' && parsed.data) {
-        const payload = parsed.data as { assistantMessage: Message; conversationId: string }
-        latestConversationId = payload.conversationId
-        latestAssistantMessageId = payload.assistantMessage.id
-        handlers.onAssistantCancelled?.(payload)
-      }
-
-      if (parsed.event === 'assistant-failed' && parsed.data) {
-        const payload = parsed.data as {
-          assistantMessage: Message
-          conversationId: string
-          message: string
-        }
-        latestConversationId = payload.conversationId
-        latestAssistantMessageId = payload.assistantMessage.id
-        handlers.onAssistantFailed?.(payload)
-      }
-
-      if (parsed.event === 'error' && parsed.data) {
-        const payload = parsed.data as { message?: string }
-        throw new Error(payload.message || '流式请求失败')
-      }
-    }
-  }
-
-  const remainingEvent = parseSseEvent(buffer.trim())
-
-  if (remainingEvent?.event === 'error' && remainingEvent.data) {
-    const payload = remainingEvent.data as { message?: string }
-    throw new Error(payload.message || '流式请求失败')
-  }
-
-  if (remainingEvent?.event === 'assistant-done' && remainingEvent.data) {
-    const payload = remainingEvent.data as { assistantMessage: Message; conversationId: string }
-    latestConversationId = payload.conversationId
-    latestAssistantMessageId = payload.assistantMessage.id
-    handlers.onAssistantDone?.(payload)
-  }
-
-  if (remainingEvent?.event === 'assistant-cancelled' && remainingEvent.data) {
-    const payload = remainingEvent.data as { assistantMessage: Message; conversationId: string }
-    latestConversationId = payload.conversationId
-    latestAssistantMessageId = payload.assistantMessage.id
-    handlers.onAssistantCancelled?.(payload)
-  }
-
-  if (remainingEvent?.event === 'assistant-failed' && remainingEvent.data) {
-    const payload = remainingEvent.data as {
-      assistantMessage: Message
-      conversationId: string
-      message: string
-    }
-    latestConversationId = payload.conversationId
-    latestAssistantMessageId = payload.assistantMessage.id
-    handlers.onAssistantFailed?.(payload)
-  }
+  await consumeSseStream(response, (parsed) => {
+    applyStreamEvent(parsed, handlers, state, '流式请求失败')
+  })
 
   return {
-    conversationId: latestConversationId,
-    assistantMessageId: latestAssistantMessageId || undefined
+    conversationId: state.latestConversationId,
+    assistantMessageId: state.latestAssistantMessageId || undefined
   }
 }
 
@@ -302,148 +197,31 @@ export async function subscribeMessageStream(
   handlers: StreamMessageHandlers,
   signal?: AbortSignal
 ): Promise<{ conversationId: string; assistantMessageId?: string }> {
-  const token = getStoredToken()
-  const response = await fetch(
-    `${apiBaseUrl}/conversations/${conversationId}/messages/${messageId}/stream`,
+  const state: StreamState = {
+    latestConversationId: conversationId,
+    latestAssistantMessageId: messageId
+  }
+
+  const response = await fetchWithAuth(
+    `/conversations/${conversationId}/messages/${messageId}/stream`,
     {
       method: 'GET',
       headers: {
-        Accept: 'text/event-stream',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
+        Accept: 'text/event-stream'
       },
       signal
     }
   )
 
-  if (response.status === 401) {
-    handleAuthFailure()
-    throw new Error('未登录或登录已过期')
-  }
+  await ensureFetchResponseOk(response, '恢复流式请求失败')
 
-  if (!response.ok || !response.body) {
-    const text = await response.text()
-    throw new Error(text || '恢复流式请求失败')
-  }
-
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  let latestConversationId = conversationId
-  let latestAssistantMessageId = messageId
-
-  while (true) {
-    const { done, value } = await reader.read()
-
-    if (done) {
-      buffer += decoder.decode()
-      break
-    }
-
-    buffer += decoder.decode(value, { stream: true })
-
-    while (true) {
-      const boundary = findSseBoundary(buffer)
-
-      if (!boundary) {
-        break
-      }
-
-      const rawEvent = buffer.slice(0, boundary.index)
-      buffer = buffer.slice(boundary.index + boundary.length)
-
-      const parsed = parseSseEvent(rawEvent)
-
-      if (!parsed) {
-        continue
-      }
-
-      if (parsed.event === 'assistant-message' && parsed.data) {
-        const assistantMessage = parsed.data as Message
-        latestAssistantMessageId = assistantMessage.id
-        handlers.onAssistantMessage?.(assistantMessage)
-      }
-
-      if (parsed.event === 'assistant-status' && parsed.data) {
-        handlers.onAssistantStatus?.(parsed.data as StreamAssistantStatus)
-      }
-
-      if (parsed.event === 'assistant-delta' && parsed.data) {
-        handlers.onAssistantDelta?.((parsed.data as { delta: string }).delta)
-      }
-
-      if (parsed.event === 'assistant-done' && parsed.data) {
-        const payload = parsed.data as { assistantMessage: Message; conversationId: string }
-        latestConversationId = payload.conversationId
-        latestAssistantMessageId = payload.assistantMessage.id
-        handlers.onAssistantDone?.(payload)
-      }
-
-      if (parsed.event === 'assistant-cancelled' && parsed.data) {
-        const payload = parsed.data as { assistantMessage: Message; conversationId: string }
-        latestConversationId = payload.conversationId
-        latestAssistantMessageId = payload.assistantMessage.id
-        handlers.onAssistantCancelled?.(payload)
-      }
-
-      if (parsed.event === 'assistant-failed' && parsed.data) {
-        const payload = parsed.data as {
-          assistantMessage: Message
-          conversationId: string
-          message: string
-        }
-        latestConversationId = payload.conversationId
-        latestAssistantMessageId = payload.assistantMessage.id
-        handlers.onAssistantFailed?.(payload)
-      }
-
-      if (parsed.event === 'error' && parsed.data) {
-        const payload = parsed.data as { message?: string }
-        throw new Error(payload.message || '恢复流式请求失败')
-      }
-    }
-  }
-
-  const remainingEvent = parseSseEvent(buffer.trim())
-
-  if (remainingEvent?.event === 'error' && remainingEvent.data) {
-    const payload = remainingEvent.data as { message?: string }
-    throw new Error(payload.message || '恢复流式请求失败')
-  }
-
-  if (remainingEvent?.event === 'assistant-message' && remainingEvent.data) {
-    const assistantMessage = remainingEvent.data as Message
-    latestAssistantMessageId = assistantMessage.id
-    handlers.onAssistantMessage?.(assistantMessage)
-  }
-
-  if (remainingEvent?.event === 'assistant-done' && remainingEvent.data) {
-    const payload = remainingEvent.data as { assistantMessage: Message; conversationId: string }
-    latestConversationId = payload.conversationId
-    latestAssistantMessageId = payload.assistantMessage.id
-    handlers.onAssistantDone?.(payload)
-  }
-
-  if (remainingEvent?.event === 'assistant-cancelled' && remainingEvent.data) {
-    const payload = remainingEvent.data as { assistantMessage: Message; conversationId: string }
-    latestConversationId = payload.conversationId
-    latestAssistantMessageId = payload.assistantMessage.id
-    handlers.onAssistantCancelled?.(payload)
-  }
-
-  if (remainingEvent?.event === 'assistant-failed' && remainingEvent.data) {
-    const payload = remainingEvent.data as {
-      assistantMessage: Message
-      conversationId: string
-      message: string
-    }
-    latestConversationId = payload.conversationId
-    latestAssistantMessageId = payload.assistantMessage.id
-    handlers.onAssistantFailed?.(payload)
-  }
+  await consumeSseStream(response, (parsed) => {
+    applyStreamEvent(parsed, handlers, state, '恢复流式请求失败')
+  })
 
   return {
-    conversationId: latestConversationId,
-    assistantMessageId: latestAssistantMessageId || undefined
+    conversationId: state.latestConversationId,
+    assistantMessageId: state.latestAssistantMessageId || undefined
   }
 }
 

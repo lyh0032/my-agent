@@ -1,30 +1,3 @@
-<template>
-  <el-dialog :model-value="modelValue" :title="title" width="560px" @close="$emit('close')">
-    <el-form label-position="top" :model="form">
-      <el-form-item label="类型">
-        <el-select v-model="form.type" placeholder="选择记忆类型">
-          <el-option label="Profile" value="profile" />
-          <el-option label="Preference" value="preference" />
-          <el-option label="Summary" value="summary" />
-          <el-option label="Fact" value="fact" />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="Key">
-        <el-input v-model="form.key" placeholder="例如: preferred_language" />
-      </el-form-item>
-      <el-form-item label="内容">
-        <el-input v-model="form.content" type="textarea" :rows="5" resize="none" />
-      </el-form-item>
-    </el-form>
-    <template #footer>
-      <div class="dialog-footer">
-        <el-button @click="$emit('close')">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">保存</el-button>
-      </div>
-    </template>
-  </el-dialog>
-</template>
-
 <script setup lang="ts">
 import { reactive, watch } from 'vue'
 
@@ -65,6 +38,33 @@ function handleSubmit() {
   })
 }
 </script>
+
+<template>
+  <el-dialog :model-value="modelValue" :title="title" width="560px" @close="$emit('close')">
+    <el-form label-position="top" :model="form">
+      <el-form-item label="类型">
+        <el-select v-model="form.type" placeholder="选择记忆类型">
+          <el-option label="Profile" value="profile" />
+          <el-option label="Preference" value="preference" />
+          <el-option label="Summary" value="summary" />
+          <el-option label="Fact" value="fact" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="Key">
+        <el-input v-model="form.key" placeholder="例如: preferred_language" />
+      </el-form-item>
+      <el-form-item label="内容">
+        <el-input v-model="form.content" type="textarea" :rows="5" resize="none" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <div class="dialog-footer">
+        <el-button @click="$emit('close')">取消</el-button>
+        <el-button type="primary" @click="handleSubmit">保存</el-button>
+      </div>
+    </template>
+  </el-dialog>
+</template>
 
 <style scoped>
 .dialog-footer {

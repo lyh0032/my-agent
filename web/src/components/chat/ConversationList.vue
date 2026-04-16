@@ -1,3 +1,37 @@
+<script setup lang="ts">
+import { ElMessageBox } from 'element-plus'
+import type { ConversationSummary } from '../../types/chat'
+import { ArrowDown, ArrowUp, DeleteFilled } from '@element-plus/icons-vue'
+
+defineProps<{
+  conversations: ConversationSummary[]
+  activeConversationId: string
+}>()
+
+const emit = defineEmits<{
+  select: [conversationId: string]
+  togglePin: [conversationId: string, isPinned: boolean]
+  delete: [conversationId: string]
+}>()
+
+function onTogglePin(e: PointerEvent, conversation: ConversationSummary) {
+  e.stopPropagation()
+  e.preventDefault()
+  emit('togglePin', conversation.id, !conversation.isPinned)
+}
+
+async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
+  e.stopPropagation()
+  e.preventDefault()
+  await ElMessageBox.confirm('确定要删除这个会话吗？', '删除会话', {
+    confirmButtonText: '删除',
+    cancelButtonText: '取消',
+    type: 'warning'
+  })
+  emit('delete', conversation.id)
+}
+</script>
+
 <template>
   <div class="conversation-list">
     <div class="conversation-list-scroll">
@@ -38,40 +72,6 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { ElMessageBox } from 'element-plus'
-import type { ConversationSummary } from '../../types/chat'
-import { ArrowDown, ArrowUp, DeleteFilled } from '@element-plus/icons-vue'
-
-defineProps<{
-  conversations: ConversationSummary[]
-  activeConversationId: string
-}>()
-
-const emit = defineEmits<{
-  select: [conversationId: string]
-  togglePin: [conversationId: string, isPinned: boolean]
-  delete: [conversationId: string]
-}>()
-
-function onTogglePin(e: PointerEvent, conversation: ConversationSummary) {
-  e.stopPropagation()
-  e.preventDefault()
-  emit('togglePin', conversation.id, !conversation.isPinned)
-}
-
-async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
-  e.stopPropagation()
-  e.preventDefault()
-  await ElMessageBox.confirm('确定要删除这个会话吗？', '删除会话', {
-    confirmButtonText: '删除',
-    cancelButtonText: '取消',
-    type: 'warning'
-  })
-  emit('delete', conversation.id)
-}
-</script>
 
 <style scoped lang="less">
 .conversation-list {

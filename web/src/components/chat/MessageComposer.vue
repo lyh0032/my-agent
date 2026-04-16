@@ -1,3 +1,37 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { Promotion, VideoPause } from '@element-plus/icons-vue'
+
+const props = defineProps<{
+  loading?: boolean
+  canStop?: boolean
+}>()
+
+const emit = defineEmits<{
+  submit: [content: string]
+  cancel: []
+}>()
+
+const content = ref('')
+
+const canSubmit = computed(() => content.value.trim().length > 0 && props.loading !== true)
+
+function handleSubmit() {
+  const value = content.value.trim()
+
+  if (!value || props.loading) {
+    return
+  }
+
+  emit('submit', value)
+  content.value = ''
+}
+
+function handleCancel() {
+  emit('cancel')
+}
+</script>
+
 <template>
   <div class="composer">
     <el-input
@@ -32,40 +66,6 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { computed, ref } from 'vue'
-import { Promotion, VideoPause } from '@element-plus/icons-vue'
-
-const props = defineProps<{
-  loading?: boolean
-  canStop?: boolean
-}>()
-
-const emit = defineEmits<{
-  submit: [content: string]
-  cancel: []
-}>()
-
-const content = ref('')
-
-const canSubmit = computed(() => content.value.trim().length > 0 && props.loading !== true)
-
-function handleSubmit() {
-  const value = content.value.trim()
-
-  if (!value || props.loading) {
-    return
-  }
-
-  emit('submit', value)
-  content.value = ''
-}
-
-function handleCancel() {
-  emit('cancel')
-}
-</script>
 
 <style scoped lang="less">
 .composer {
