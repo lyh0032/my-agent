@@ -255,7 +255,7 @@ async function stringifyToolResult(result: unknown): Promise<string> {
   }
 }
 
-function parseRawToolCalls(rawToolCalls: unknown): ToolCallLike[] {
+function f(rawToolCalls: unknown): ToolCallLike[] {
   if (!Array.isArray(rawToolCalls)) {
     return []
   }
@@ -354,7 +354,7 @@ function extractToolCalls(
     }
   }
 
-  const rawToolCalls = parseRawToolCalls(
+  const rawToolCalls = f(
     (message.additional_kwargs as { tool_calls?: unknown } | undefined)?.tool_calls
   )
 
@@ -383,12 +383,20 @@ function getToolStatusText(toolCalls: ToolCallLike[]): string {
     return '正在联网检索相关信息...'
   }
 
+  if (toolCalls.some((toolCall) => toolCall.name === 'drawImageTool')) {
+    return '正在生成图片并上传云端...'
+  }
+
   return '正在调用工具处理问题...'
 }
 
 function getReasoningStatusText(toolCalls: ToolCallLike[]): string {
   if (toolCalls.some((toolCall) => toolCall.name === 'webSearchTool')) {
     return '检索完成，正在整理答案...'
+  }
+
+  if (toolCalls.some((toolCall) => toolCall.name === 'drawImageTool')) {
+    return '图片已生成，正在整理结果...'
   }
 
   return '工具执行完成，正在整理答案...'

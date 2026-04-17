@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, watch, ref, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElLoading, ElMessage } from 'element-plus'
 
 import ConversationList from '../components/chat/ConversationList.vue'
 import MessageComposer from '../components/chat/MessageComposer.vue'
@@ -74,7 +74,12 @@ watch(
   () => route.query.conversationId,
   async (conversationId) => {
     if (typeof conversationId === 'string' && conversationId !== chatStore.activeConversationId) {
-      await chatStore.selectConversation(conversationId)
+      const lds = ElLoading.service()
+      try {
+        await chatStore.selectConversation(conversationId)
+      } finally {
+        lds.close()
+      }
       await nextTick()
       scrollToBottom(false)
     }
@@ -156,6 +161,7 @@ async function handleSelectConversation(conversationId: string) {
 async function handleDeleteConversation(conversationId: string) {
   await chatStore.deleteConversation(conversationId)
   await chatStore.loadConversations()
+
   if (chatStore.conversations.length > 0) {
     await router.replace({
       query: {

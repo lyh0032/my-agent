@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { Message } from '../../types/chat'
-import { renderMarkdown } from '../../utils/markdown'
+import {
+  extractMarkdownImages,
+  renderMarkdown,
+  stripMarkdownImages,
+  type MarkdownImageAsset
+} from '../../utils/markdown'
 import { dayjs } from 'element-plus'
 
 const props = defineProps<{
@@ -40,8 +45,43 @@ const showThinkingBubble = computed(() => {
   return props.messages[props.messages.length - 1]?.role !== 'assistant'
 })
 
+const previewImage = ref<{
+  image: MarkdownImageAsset
+  fileName: string
+} | null>(null)
+
 function renderedContent(message: Message) {
-  return renderMarkdown(message.content)
+  return renderMarkdown(stripMarkdownImages(message.content))
+}
+
+function getMessageImages(message: Message) {
+  return extractMarkdownImages(message.content)
+}
+
+function openImagePreview(image: MarkdownImageAsset, message: Message, index: number) {
+  previewImage.value = {
+    image,
+    fileName: buildImageFileName(message, index)
+  }
+}
+
+function closeImagePreview() {
+  previewImage.value = null
+}
+
+function buildImageFileName(message: Message, index: number) {
+  return `generated-${message.id}-${index + 1}.png`
+}
+
+function downloadImage(image: MarkdownImageAsset, message: Message, index: number) {
+  const anchor = document.createElement('a')
+  anchor.href = image.url
+  anchor.download = buildImageFileName(message, index)
+  anchor.target = '_blank'
+  anchor.rel = 'noopener noreferrer'
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
 }
 </script>
 
@@ -70,6 +110,7 @@ function renderedContent(message: Message) {
         </span>
       </span>
       <div
+        v-if="message.role !== 'user' ? renderedContent(message) : message.content"
         class="message-bubble-content"
         v-html="
           message.role !== 'user'
@@ -77,6 +118,28 @@ function renderedContent(message: Message) {
             : `<div style='white-space: pre-wrap;'>${message.content}</div>`
         "
       ></div>
+      <div v-if="getMessageImages(message).length > 0" class="message-bubble-gallery">
+        <figure
+          v-for="(image, index) in getMessageImages(message)"
+          :key="`${message.id}-${image.url}-${index}`"
+          class="message-bubble-gallery-card"
+        >
+          <button
+            class="message-bubble-gallery-trigger"
+            type="button"
+            @click="openImagePreview(image, message, index)"
+          >
+            <img :src="image.url" :alt="image.alt || '生成图片'" loading="lazy" />
+          </button>
+          <figcaption class="message-bubble-gallery-caption">
+            {{ image.alt || image.title || '生成图片' }}
+          </figcaption>
+          <div class="message-bubble-gallery-actions">
+            <button type="button" @click="openImagePreview(image, message, index)">预览</button>
+            <button type="button" @click="downloadImage(image, message, index)">下载</button>
+          </div>
+        </figure>
+      </div>
       <span v-if="showStreamingCursor(message)" class="message-bubble-cursor"></span>
     </article>
     <article
@@ -98,6 +161,30 @@ function renderedContent(message: Message) {
         </span>
       </div>
     </article>
+
+    <el-dialog
+      :model-value="Boolean(previewImage)"
+      width="min(92vw, 960px)"
+      top="6vh"
+      append-to-body
+      destroy-on-close
+      @close="closeImagePreview"
+    >
+      <div v-if="previewImage" class="message-preview-dialog">
+        <img :src="previewImage.image.url" :alt="previewImage.image.alt || '生成图片预览'" />
+        <div class="message-preview-dialog-actions">
+          <button type="button" @click="closeImagePreview">关闭</button>
+          <a
+            :href="previewImage.image.url"
+            :download="previewImage.fileName"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            下载图片
+          </a>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -264,6 +351,65 @@ function renderedContent(message: Message) {
     }
   }
 
+  &-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+  }
+
+  &-gallery-card {
+    margin: 0;
+    padding: 10px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.56);
+    border: 1px solid rgba(18, 52, 88, 0.12);
+  }
+
+  &-gallery-trigger {
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: zoom-in;
+
+    img {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      display: block;
+      border-radius: 12px;
+      background: rgba(18, 52, 88, 0.08);
+    }
+  }
+
+  &-gallery-caption {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #324155;
+  }
+
+  &-gallery-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+
+    button {
+      flex: 1;
+      height: 36px;
+      border: 0;
+      border-radius: 10px;
+      background: #123458;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    button:last-child {
+      background: rgba(18, 52, 88, 0.12);
+      color: #123458;
+    }
+  }
+
   &-cursor {
     display: inline-block;
     width: 0.7ch;
@@ -306,6 +452,45 @@ function renderedContent(message: Message) {
       &:nth-child(3) {
         animation-delay: 0.3s;
       }
+    }
+  }
+}
+
+.message-preview-dialog {
+  display: grid;
+  gap: 16px;
+
+  img {
+    width: 100%;
+    max-height: 76vh;
+    object-fit: contain;
+    border-radius: 18px;
+    background: rgba(18, 52, 88, 0.06);
+  }
+
+  &-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+
+    button,
+    a {
+      min-width: 104px;
+      height: 40px;
+      border: 0;
+      border-radius: 12px;
+      background: #123458;
+      color: #fff;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+    }
+
+    button:first-child {
+      background: rgba(18, 52, 88, 0.12);
+      color: #123458;
     }
   }
 }
