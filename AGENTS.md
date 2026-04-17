@@ -107,12 +107,12 @@
 - 前端 API：`web/src/api/model-preference.ts`
 - 前端类型：`web/src/types/chat.ts` 中的 `ModelInfo`
 
-### 8. 联网查询 Tools
-- 工具定义入口：`server/src/lib/agent/tools.ts`
-- MCP 客户端封装：`server/src/lib/agent/mcp.ts`
-- 当前内置工具：`webSearchTool`
+### 8. MCP & Tools
+- MCP 客户端封装：`server/src/lib/mcp.ts`
+- 工具定义入口：`server/src/lib/tools/tools.ts`
+- 工具-联网查询：`server/src/lib/tools/webSearch.ts`
+- 工具-画图：`server/src/lib/tools/drawImage.ts`
 - AI 工具调用主逻辑：`server/src/lib/ai.ts`
-- 当前 system prompt 已明确要求：遇到“实时新闻、最新动态、当前价格、近期事件结果”等强时效问题，必须优先调用 `webSearchTool`。
 - 环境变量说明：`server/src/config/env.ts`，以及本文件前面的 `DASHSCOPE_API_KEY` / `MCP_SERVERS` 说明。
 
 ### 9. 前端页面与主入口

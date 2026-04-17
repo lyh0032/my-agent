@@ -11,7 +11,7 @@ import { z } from 'zod'
 
 import { env } from '../config/env'
 import { AppError } from '../utils/app-error'
-import { tools } from './agent/tools'
+import { tools } from './tools/tools'
 import dayjs from 'dayjs'
 
 type ConversationMessage = {
@@ -108,6 +108,28 @@ function sanitizeConversationTitle(title: string, fallback: string): string {
   return finalTitle || fallback.slice(0, 120).trim() || '新会话'
 }
 
+function buildToolPromptSection(): string {
+  if (!tools.length) {
+    return ''
+  }
+
+  const toolList = tools.map((tool, index) => {
+    const description = tool.description?.replace(/\s+/g, ' ').trim() || '按工具定义正确使用。'
+
+    return `${index + 1}. ${tool.name}：${description}`
+  })
+
+  return [
+    '工具使用规则：',
+    '1. 只有当工具能显著提升答案的准确性、时效性或可执行性时才调用。',
+    '2. 涉及实时信息、外部事实核验或需要工具能力才能完成的任务时，应优先调用合适工具，不要凭空猜测。',
+    '3. 每次调用前先选择最合适的工具，并提供完整、有效、符合 schema 的参数。',
+    '4. 工具返回的是证据或中间结果，不是最终答案；你需要整合、提炼后再回复用户。',
+    '可用工具：',
+    ...toolList
+  ].join('\n')
+}
+
 function buildLangChainMessages({
   latestUserMessage,
   memoryContext,
@@ -116,11 +138,7 @@ function buildLangChainMessages({
   const systemPrompt = [
     '你是一个中文优先的 AI 助手。',
     '回答要直接、清晰、尽量有可执行性。',
-    '工具使用规则：',
-    '1. 只要用户询问实时新闻、最新动态、今天/最近发生了什么、当前价格、近期赛事结果等强时效性信息，必须先调用 webSearchTool。',
-    '2. 工具返回后，要基于工具结果继续回答，不要忽略工具输出。',
-    '3. webSearchTool 返回的是检索原始结果，你需要自行提炼时间、事实、结论并组织成最终回答，不要把工具输出原样当成最终答案。',
-    '4. 调用工具时必须提供完整且有效的参数。调用 webSearchTool 时，query 必须是非空字符串，不能传空对象。',
+    buildToolPromptSection(),
     memoryContext.length > 0
       ? `以下是当前用户的长期记忆，仅在和当前问题相关时自然使用，不要逐条复述：\n${memoryContext.join('\n')}`
       : ''
