@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { Message } from '../../types/chat'
+import type { Message, StreamAssistantStatus } from '../../types/chat'
 import {
   extractMarkdownImages,
-  renderMarkdown,
-  stripMarkdownImages,
+  renderMarkdownWithoutFileLinks,
   type MarkdownImageAsset
 } from '../../utils/markdown'
 import { dayjs } from 'element-plus'
@@ -13,7 +12,19 @@ const props = defineProps<{
   messages: Message[]
   streaming?: boolean
   thinkingText?: string
+  streamingStatus?: StreamAssistantStatus | null
 }>()
+
+const toolStatusMetaMap: Record<string, { label: string; tone: 'tool' | 'search' | 'image' }> = {
+  webSearchTool: {
+    label: '联网检索',
+    tone: 'search'
+  },
+  drawImageTool: {
+    label: '图片生成',
+    tone: 'image'
+  }
+}
 
 const roleLabelMap = {
   user: '你',
@@ -51,26 +62,42 @@ const previewImage = ref<{
 } | null>(null)
 
 function renderedContent(message: Message) {
-  return renderMarkdown(stripMarkdownImages(message.content))
+  return renderMarkdownWithoutFileLinks(message.content, message.fileList)
 }
 
 function getMessageImages(message: Message) {
+  const imageFiles = message.fileList.filter((file) => file.kind === 'image')
+
+  if (imageFiles.length > 0) {
+    return imageFiles.map((file) => ({
+      ...file,
+      alt: file.name,
+      title: file.name
+    }))
+  }
+
   return extractMarkdownImages(message.content)
 }
 
-function openImagePreview(image: MarkdownImageAsset, message: Message, index: number) {
-  previewImage.value = {
-    image,
-    fileName: buildImageFileName(message, index)
-  }
-}
+const activeToolMeta = computed(() => {
+  const toolName = props.streamingStatus?.toolName
 
-function closeImagePreview() {
-  previewImage.value = null
-}
+  if (!toolName) {
+    return null
+  }
+
+  return (
+    toolStatusMetaMap[toolName] ?? {
+      label: toolName,
+      tone: 'tool' as const
+    }
+  )
+})
 
 function buildImageFileName(message: Message, index: number) {
-  return `generated-${message.id}-${index + 1}.png`
+  const image = getMessageImages(message)[index]
+  const extension = image?.url.split('.').pop()?.split('?')[0] || 'png'
+  return `generated-${message.id}-${index + 1}.${extension}`
 }
 
 function downloadImage(image: MarkdownImageAsset, message: Message, index: number) {
@@ -82,6 +109,46 @@ function downloadImage(image: MarkdownImageAsset, message: Message, index: numbe
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()
+}
+
+function isLatestGeneratingAssistantMessage(message: Message) {
+  return (
+    props.streaming === true &&
+    message.role === 'assistant' &&
+    message.status === 'generating' &&
+    props.messages[props.messages.length - 1]?.id === message.id
+  )
+}
+
+function showToolStatusInMessage(message: Message) {
+  return isLatestGeneratingAssistantMessage(message) && Boolean(props.streamingStatus)
+}
+
+function showInlineStatus(message: Message) {
+  return (
+    showToolStatusInMessage(message) &&
+    (Boolean(activeToolMeta.value) || showMessageContent(message))
+  )
+}
+
+function showInlineStatusText(message: Message) {
+  return showToolStatusInMessage(message) && showMessageContent(message)
+}
+
+function showMessageContent(message: Message) {
+  if (message.role === 'user') {
+    return Boolean(message.content)
+  }
+
+  return Boolean(renderedContent(message))
+}
+
+function showMessageStatusPlaceholder(message: Message) {
+  return (
+    showToolStatusInMessage(message) &&
+    !showMessageContent(message) &&
+    getMessageImages(message).length === 0
+  )
 }
 </script>
 
@@ -109,8 +176,20 @@ function downloadImage(image: MarkdownImageAsset, message: Message, index: numbe
           {{ messageStatusLabelMap[message.status] }}
         </span>
       </span>
+      <div v-if="showInlineStatus(message)" class="message-bubble-inline-status">
+        <span
+          v-if="activeToolMeta"
+          class="message-bubble-tool-chip"
+          :class="`message-bubble-tool-chip--${activeToolMeta.tone}`"
+        >
+          调用{{ activeToolMeta.label }}工具中
+        </span>
+        <span v-if="showInlineStatusText(message)" class="message-bubble-inline-status-text">
+          {{ props.streamingStatus?.text }}
+        </span>
+      </div>
       <div
-        v-if="message.role !== 'user' ? renderedContent(message) : message.content"
+        v-if="showMessageContent(message)"
         class="message-bubble-content"
         v-html="
           message.role !== 'user'
@@ -118,24 +197,32 @@ function downloadImage(image: MarkdownImageAsset, message: Message, index: numbe
             : `<div style='white-space: pre-wrap;'>${message.content}</div>`
         "
       ></div>
+      <div v-if="showMessageStatusPlaceholder(message)" class="message-bubble-status-placeholder">
+        <span class="message-bubble-status-placeholder-text">{{
+          props.streamingStatus?.text
+        }}</span>
+        <span class="message-bubble-thinking-dots" aria-hidden="true">
+          <i></i>
+          <i></i>
+          <i></i>
+        </span>
+      </div>
       <div v-if="getMessageImages(message).length > 0" class="message-bubble-gallery">
         <figure
           v-for="(image, index) in getMessageImages(message)"
           :key="`${message.id}-${image.url}-${index}`"
           class="message-bubble-gallery-card"
         >
-          <button
-            class="message-bubble-gallery-trigger"
-            type="button"
-            @click="openImagePreview(image, message, index)"
-          >
-            <img :src="image.url" :alt="image.alt || '生成图片'" loading="lazy" />
-          </button>
+          <img
+            class="message-bubble-gallery-img"
+            :src="image.url"
+            :alt="image.alt || '生成图片'"
+            loading="lazy"
+          />
           <figcaption class="message-bubble-gallery-caption">
             {{ image.alt || image.title || '生成图片' }}
           </figcaption>
           <div class="message-bubble-gallery-actions">
-            <button type="button" @click="openImagePreview(image, message, index)">预览</button>
             <button type="button" @click="downloadImage(image, message, index)">下载</button>
           </div>
         </figure>
@@ -148,10 +235,7 @@ function downloadImage(image: MarkdownImageAsset, message: Message, index: numbe
       aria-live="polite"
       aria-busy="true"
     >
-      <span class="message-bubble-role">
-        {{ roleLabelMap.assistant }}
-        <span class="message-bubble-time">思考中...</span>
-      </span>
+      <span class="message-bubble-role">{{ roleLabelMap.assistant }}</span>
       <div class="message-bubble-thinking">
         <span class="message-bubble-thinking-text">{{ props.thinkingText || '正在整理回答' }}</span>
         <span class="message-bubble-thinking-dots" aria-hidden="true">
@@ -161,30 +245,6 @@ function downloadImage(image: MarkdownImageAsset, message: Message, index: numbe
         </span>
       </div>
     </article>
-
-    <el-dialog
-      :model-value="Boolean(previewImage)"
-      width="min(92vw, 960px)"
-      top="6vh"
-      append-to-body
-      destroy-on-close
-      @close="closeImagePreview"
-    >
-      <div v-if="previewImage" class="message-preview-dialog">
-        <img :src="previewImage.image.url" :alt="previewImage.image.alt || '生成图片预览'" />
-        <div class="message-preview-dialog-actions">
-          <button type="button" @click="closeImagePreview">关闭</button>
-          <a
-            :href="previewImage.image.url"
-            :download="previewImage.fileName"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            下载图片
-          </a>
-        </div>
-      </div>
-    </el-dialog>
   </div>
 </template>
 
@@ -366,21 +426,13 @@ function downloadImage(image: MarkdownImageAsset, message: Message, index: numbe
     border: 1px solid rgba(18, 52, 88, 0.12);
   }
 
-  &-gallery-trigger {
+  &-gallery-img {
     width: 100%;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    cursor: zoom-in;
-
-    img {
-      width: 100%;
-      aspect-ratio: 1 / 1;
-      object-fit: cover;
-      display: block;
-      border-radius: 12px;
-      background: rgba(18, 52, 88, 0.08);
-    }
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    display: block;
+    border-radius: 12px;
+    background: rgba(18, 52, 88, 0.08);
   }
 
   &-gallery-caption {
@@ -403,11 +455,33 @@ function downloadImage(image: MarkdownImageAsset, message: Message, index: numbe
       color: #fff;
       cursor: pointer;
     }
+  }
 
-    button:last-child {
-      background: rgba(18, 52, 88, 0.12);
-      color: #123458;
-    }
+  &-inline-status {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  &-inline-status-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: #324155;
+  }
+
+  &-status-placeholder {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 28px;
+    color: #324155;
+  }
+
+  &-status-placeholder-text {
+    font-size: 14px;
+    font-weight: 600;
   }
 
   &-cursor {
@@ -423,7 +497,34 @@ function downloadImage(image: MarkdownImageAsset, message: Message, index: numbe
   &-thinking {
     display: inline-flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
+  }
+
+  &-tool-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+
+    &--tool {
+      background: rgba(18, 52, 88, 0.12);
+      color: #123458;
+    }
+
+    &--search {
+      background: rgba(20, 115, 92, 0.14);
+      color: #0e6b58;
+    }
+
+    &--image {
+      background: rgba(140, 92, 42, 0.16);
+      color: #8c5c2a;
+    }
   }
 
   &-thinking-text {
@@ -452,45 +553,6 @@ function downloadImage(image: MarkdownImageAsset, message: Message, index: numbe
       &:nth-child(3) {
         animation-delay: 0.3s;
       }
-    }
-  }
-}
-
-.message-preview-dialog {
-  display: grid;
-  gap: 16px;
-
-  img {
-    width: 100%;
-    max-height: 76vh;
-    object-fit: contain;
-    border-radius: 18px;
-    background: rgba(18, 52, 88, 0.06);
-  }
-
-  &-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-
-    button,
-    a {
-      min-width: 104px;
-      height: 40px;
-      border: 0;
-      border-radius: 12px;
-      background: #123458;
-      color: #fff;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      text-decoration: none;
-    }
-
-    button:first-child {
-      background: rgba(18, 52, 88, 0.12);
-      color: #123458;
     }
   }
 }

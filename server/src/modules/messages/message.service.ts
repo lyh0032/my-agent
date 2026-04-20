@@ -6,6 +6,7 @@ import {
   generateConversationTitle,
   streamAssistantReply
 } from '../../lib/ai'
+import { serializeMessageForClient, type ClientMessage } from '../../utils/message-files'
 import { runLongTermMemoryGraph } from '../../lib/memory-graph'
 import { AppError } from '../../utils/app-error'
 import {
@@ -21,20 +22,21 @@ const STREAM_PERSIST_MIN_CHARS = 80
 type AssistantStatusPayload = {
   stage: 'thinking' | 'tool' | 'reasoning'
   text: string
+  toolName?: string
 }
 
 type StreamMessageHandlers = {
-  onUserMessage?: (payload: PrismaMessage) => void
-  onAssistantMessage?: (payload: PrismaMessage) => void
+  onUserMessage?: (payload: ClientMessage) => void
+  onAssistantMessage?: (payload: ClientMessage) => void
   onAssistantStatus?: (payload: AssistantStatusPayload) => void
   onAssistantDelta?: (delta: string) => void
-  onAssistantDone?: (payload: { assistantMessage: PrismaMessage; conversationId: string }) => void
+  onAssistantDone?: (payload: { assistantMessage: ClientMessage; conversationId: string }) => void
   onAssistantCancelled?: (payload: {
-    assistantMessage: PrismaMessage
+    assistantMessage: ClientMessage
     conversationId: string
   }) => void
   onAssistantFailed?: (payload: {
-    assistantMessage: PrismaMessage
+    assistantMessage: ClientMessage
     conversationId: string
     message: string
   }) => void
@@ -202,7 +204,7 @@ function subscribeToTask(
   task.subscribers.add(handlers)
 
   if (options?.replayAssistantMessage) {
-    handlers.onAssistantMessage?.(cloneMessage(task.assistantMessage))
+    handlers.onAssistantMessage?.(serializeMessageForClient(cloneMessage(task.assistantMessage)))
 
     if (task.latestStatus && task.assistantMessage.status === MessageStatus.generating) {
       handlers.onAssistantStatus?.(task.latestStatus)
@@ -298,7 +300,7 @@ async function finalizeTaskAsCancelled(task: StreamTask) {
 
   broadcastToTask(task, (handlers) => {
     handlers.onAssistantCancelled?.({
-      assistantMessage: cloneMessage(task.assistantMessage),
+      assistantMessage: serializeMessageForClient(cloneMessage(task.assistantMessage)),
       conversationId: task.assistantMessage.conversationId
     })
   })
@@ -319,7 +321,7 @@ async function finalizeTaskAsFailed(task: StreamTask, error: unknown) {
 
   broadcastToTask(task, (handlers) => {
     handlers.onAssistantFailed?.({
-      assistantMessage: cloneMessage(task.assistantMessage),
+      assistantMessage: serializeMessageForClient(cloneMessage(task.assistantMessage)),
       conversationId: task.assistantMessage.conversationId,
       message
     })
@@ -346,7 +348,7 @@ async function finalizeTaskAsCompleted(task: StreamTask) {
 
   broadcastToTask(task, (handlers) => {
     handlers.onAssistantDone?.({
-      assistantMessage: cloneMessage(task.assistantMessage),
+      assistantMessage: serializeMessageForClient(cloneMessage(task.assistantMessage)),
       conversationId: task.assistantMessage.conversationId
     })
   })
@@ -517,7 +519,7 @@ export async function listMessages(userId: string, conversationId: string) {
     orderBy: { createdAt: 'asc' }
   })
 
-  return { messages }
+  return { messages: messages.map(serializeMessageForClient) }
 }
 
 export async function createMessage(
@@ -582,8 +584,8 @@ export async function createMessage(
 
   return {
     conversationId,
-    userMessage,
-    assistantMessage
+    userMessage: serializeMessageForClient(userMessage),
+    assistantMessage: serializeMessageForClient(assistantMessage)
   }
 }
 
@@ -618,8 +620,8 @@ export async function streamMessage(
     }
   })
 
-  handlers.onUserMessage?.(userMessage)
-  handlers.onAssistantMessage?.(assistantMessage)
+  handlers.onUserMessage?.(serializeMessageForClient(userMessage))
+  handlers.onAssistantMessage?.(serializeMessageForClient(assistantMessage))
 
   try {
     const { history, memories, memoryContext } = await loadMessageGenerationContext(
@@ -659,7 +661,7 @@ export async function streamMessage(
     })
 
     handlers.onAssistantFailed?.({
-      assistantMessage: failedAssistantMessage,
+      assistantMessage: serializeMessageForClient(failedAssistantMessage),
       conversationId,
       message: error instanceof Error ? error.message : '流式消息处理失败'
     })
@@ -698,21 +700,21 @@ export async function subscribeMessageStream(
     assistantMessage = await markOrphanGeneratingMessageAsFailed(messageId)
   }
 
-  handlers.onAssistantMessage?.(assistantMessage)
+  handlers.onAssistantMessage?.(serializeMessageForClient(assistantMessage))
 
   if (assistantMessage.status === MessageStatus.completed) {
     handlers.onAssistantDone?.({
-      assistantMessage,
+      assistantMessage: serializeMessageForClient(assistantMessage),
       conversationId
     })
   } else if (assistantMessage.status === MessageStatus.cancelled) {
     handlers.onAssistantCancelled?.({
-      assistantMessage,
+      assistantMessage: serializeMessageForClient(assistantMessage),
       conversationId
     })
   } else if (assistantMessage.status === MessageStatus.failed) {
     handlers.onAssistantFailed?.({
-      assistantMessage,
+      assistantMessage: serializeMessageForClient(assistantMessage),
       conversationId,
       message: '流式输出已终止'
     })
@@ -734,23 +736,25 @@ export async function cancelMessageStream(
 
   if (!task) {
     if (assistantMessage.status === MessageStatus.generating) {
-      return prisma.message.update({
+      const cancelledMessage = await prisma.message.update({
         where: { id: assistantMessage.id },
         data: {
           status: MessageStatus.cancelled
         }
       })
+
+      return serializeMessageForClient(cancelledMessage)
     }
 
-    return assistantMessage
+    return serializeMessageForClient(assistantMessage)
   }
 
   task.cancelRequested = true
   task.abortController.abort()
 
-  return {
+  return serializeMessageForClient({
     ...assistantMessage,
     status: MessageStatus.cancelled,
     updatedAt: new Date()
-  }
+  })
 }

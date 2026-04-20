@@ -1,8 +1,7 @@
 import { tool } from '@langchain/core/tools'
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
-import { randomUUID } from 'node:crypto'
 
 import { env } from '../../config/env'
+import { putObject } from '../../utils/obs'
 import z from 'zod'
 
 type DashScopeImageResponse = {
@@ -21,13 +20,9 @@ type DashScopeImageResponse = {
 }
 
 type UploadedImage = {
-  objectKey: string
-  publicUrl?: string
+  publicUrl: string
 }
 
-const DEFAULT_STORAGE_REGION = 'us-east-1'
-const STORAGE_FORCE_PATH_STYLE = true
-const STORAGE_MAX_ATTEMPTS = 1
 const DEFAULT_NEGATIVE_PROMPT =
   '低分辨率，低画质，肢体畸形，手指畸形，构图混乱，文字模糊，扭曲，过度平滑，强烈 AI 感。'
 
@@ -82,88 +77,6 @@ function sanitizeAltText(text: string) {
       .trim()
       .slice(0, 60) || '生成图片'
   )
-}
-
-function createObjectKey(prompt: string, contentType: string, sourceUrl: string) {
-  const date = new Date()
-  const datePath = [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0')
-  ].join('/')
-  const promptSlug =
-    prompt
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^\p{L}\p{N}-]/gu, '')
-      .slice(0, 32) || 'image'
-
-  const urlPath = new URL(sourceUrl).pathname
-  const urlExtension = urlPath.includes('.') ? urlPath.split('.').pop()?.split('?')[0] : ''
-  const contentTypeExtension = contentType === 'image/jpeg' ? 'jpg' : contentType.split('/')[1]
-  const extension =
-    (urlExtension || contentTypeExtension || 'png').replace(/[^a-zA-Z0-9]/g, '') || 'png'
-  const prefix = env.STORAGE_PREFIX.replace(/^\/+|\/+$/g, '')
-
-  return `${prefix}/${datePath}/${promptSlug}-${randomUUID()}.${extension}`
-}
-
-function buildPublicUrl(objectKey: string) {
-  const encodedKey = objectKey
-    .split('/')
-    .map((segment) => encodeURIComponent(segment))
-    .join('/')
-
-  if (env.STORAGE_PUBLIC_BASE_URL) {
-    return `${env.STORAGE_PUBLIC_BASE_URL.replace(/\/$/, '')}/${encodedKey}`
-  }
-
-  if (!env.STORAGE_ENDPOINT || !env.STORAGE_BUCKET) {
-    return undefined
-  }
-
-  return `${env.STORAGE_ENDPOINT.replace(/\/$/, '')}/${encodeURIComponent(env.STORAGE_BUCKET)}/${encodedKey}`
-}
-
-function canUploadToS3() {
-  return Boolean(
-    env.STORAGE_ENDPOINT &&
-    env.STORAGE_BUCKET &&
-    env.STORAGE_ACCESS_KEY_ID &&
-    env.STORAGE_SECRET_ACCESS_KEY
-  )
-}
-
-function createS3Client() {
-  if (!canUploadToS3()) {
-    return null
-  }
-
-  return new S3Client({
-    endpoint: env.STORAGE_ENDPOINT,
-    region: DEFAULT_STORAGE_REGION,
-    forcePathStyle: STORAGE_FORCE_PATH_STYLE,
-    maxAttempts: STORAGE_MAX_ATTEMPTS,
-    credentials: {
-      accessKeyId: env.STORAGE_ACCESS_KEY_ID!,
-      secretAccessKey: env.STORAGE_SECRET_ACCESS_KEY!
-    }
-  })
-}
-
-function createTimeoutAbortController(timeoutMs: number) {
-  const abortController = new AbortController()
-  const timer = setTimeout(() => {
-    abortController.abort(new Error(`操作超时（${timeoutMs}ms）`))
-  }, timeoutMs)
-
-  return {
-    signal: abortController.signal,
-    cleanup() {
-      clearTimeout(timer)
-    }
-  }
 }
 
 async function parseJsonResponse<T>(response: Response): Promise<T | null> {
@@ -226,54 +139,19 @@ async function callQwenImageApi(input: { prompt: string; negativePrompt?: string
   }
 }
 
-async function uploadImageToS3(sourceUrl: string, prompt: string): Promise<UploadedImage | null> {
-  const s3Client = createS3Client()
+function canUploadToObs() {
+  return Boolean(env.STORAGE_BUCKET && env.STORAGE_ACCESS_KEY_ID && env.STORAGE_SECRET_ACCESS_KEY)
+}
 
-  if (!s3Client) {
-    console.log('s3Client为空')
+async function uploadImageToObs(sourceUrl: string): Promise<UploadedImage | null> {
+  if (!canUploadToObs()) {
+    console.log('obs配置不完整')
     return null
   }
-
-  const downloadTimeout = createTimeoutAbortController(env.STORAGE_DOWNLOAD_TIMEOUT_MS)
-  let imageResponse: Response
-
-  try {
-    imageResponse = await fetch(sourceUrl, {
-      signal: downloadTimeout.signal
-    })
-  } finally {
-    downloadTimeout.cleanup()
-  }
-
-  if (!imageResponse.ok) {
-    console.log('下载阿里云临时图片失败，无法上传到 S3 存储')
-    throw new Error('下载阿里云临时图片失败，无法上传到 S3 存储')
-  }
-
-  const contentType = imageResponse.headers.get('content-type') || 'image/png'
-  const imageBuffer = Buffer.from(await imageResponse.arrayBuffer())
-  const objectKey = createObjectKey(prompt, contentType, sourceUrl)
-
-  const params = {
-    Bucket: env.STORAGE_BUCKET,
-    Key: objectKey,
-    Body: imageBuffer,
-    ContentType: contentType
-  }
-  console.log('S3-1.5', params)
-  const uploadTimeout = createTimeoutAbortController(env.STORAGE_UPLOAD_TIMEOUT_MS)
-
-  try {
-    await s3Client.send(new PutObjectCommand(params), {
-      abortSignal: uploadTimeout.signal
-    })
-  } finally {
-    uploadTimeout.cleanup()
-  }
+  const uploaded = await putObject(sourceUrl)
 
   return {
-    objectKey,
-    publicUrl: buildPublicUrl(objectKey)
+    publicUrl: uploaded.url
   }
 }
 
@@ -313,17 +191,15 @@ export const drawImageTool = tool(
         negativePrompt,
         size: resolvedSize
       })
-      console.log('S3-1', generated.imageUrl, resolvedPrompt)
-      const uploaded = await uploadImageToS3(generated.imageUrl, resolvedPrompt).catch((error) => {
+      console.log('OBS-1', generated.imageUrl)
+      const uploaded = await uploadImageToObs(generated.imageUrl).catch((error) => {
         console.error('对象存储上传失败，回退临时图片地址:', error)
         return null
       })
-      console.log('S3-2', uploaded)
+      console.log('OBS-2', uploaded?.publicUrl)
       const displayUrl = uploaded?.publicUrl || generated.imageUrl
       const storageNote = uploaded
-        ? uploaded.publicUrl
-          ? '图片已上传到 S3 兼容存储，并生成了可直接访问的地址。'
-          : '图片已上传到 S3 兼容存储，但未配置 STORAGE_PUBLIC_BASE_URL，当前先回退为阿里云临时地址预览。'
+        ? '图片已上传到对象存储，并生成了可直接访问的地址。'
         : '对象存储未配置或上传超时，当前先使用阿里云返回的 24 小时临时地址预览。'
 
       return buildToolResponse({
@@ -332,7 +208,7 @@ export const drawImageTool = tool(
         requestId: generated.requestId,
         displayUrl,
         storageNote,
-        objectKey: uploaded?.objectKey
+        objectKey: undefined
       })
     } catch (error) {
       return `图片生成失败: ${error instanceof Error ? error.message : '未知错误'}`

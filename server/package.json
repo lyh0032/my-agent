@@ -11,7 +11,6 @@
     "prisma:migrate": "prisma migrate dev"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1031.0",
     "@langchain/core": "^0.3.28",
     "@langchain/langgraph": "^1.2.8",
     "@langchain/openai": "^0.4.5",
@@ -24,6 +23,7 @@
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "langchain": "1.2.37",
+    "qiniu": "^7.15.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

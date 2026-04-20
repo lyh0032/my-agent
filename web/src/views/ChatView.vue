@@ -324,6 +324,7 @@ async function handleLogout() {
               :messages="chatStore.messages"
               :streaming="chatStore.isSending"
               :thinking-text="chatStore.streamingStatusText"
+              :streaming-status="chatStore.streamingStatus"
             />
           </section>
         </div>

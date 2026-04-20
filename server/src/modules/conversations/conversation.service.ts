@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client'
 
 import { prisma } from '../../lib/prisma'
 import { AppError } from '../../utils/app-error'
+import { serializeMessageForClient } from '../../utils/message-files'
 import type {
   CreateConversationBody,
   PinConversationBody,
@@ -81,7 +82,10 @@ export async function getConversationDetail(userId: string, conversationId: stri
     throw new AppError(404, '会话不存在', 'NOT_FOUND')
   }
 
-  return conversation
+  return {
+    ...conversation,
+    messages: conversation.messages.map(serializeMessageForClient)
+  }
 }
 
 export async function updateConversation(

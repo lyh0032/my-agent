@@ -23,7 +23,7 @@ type GenerateAssistantReplyParams = {
   latestUserMessage: string
   memoryContext: string[]
   conversationHistory: ConversationMessage[]
-  onStatusChange?: (payload: { stage: 'thinking' | 'tool' | 'reasoning'; text: string }) => void
+  onStatusChange?: (payload: AssistantStatusPayload) => void
   modelOverride?: string
   signal?: AbortSignal
 }
@@ -47,9 +47,24 @@ type GenerateMemoryCandidatesParams = {
 
 type ChatModelWithTools = ReturnType<ChatOpenAI['bindTools']>
 type ToolCallLike = NonNullable<AIMessage['tool_calls']>[number]
+type AssistantStatusPayload = {
+  stage: 'thinking' | 'tool' | 'reasoning'
+  text: string
+  toolName?: string
+}
 
 const MAX_TOOL_CALL_ROUNDS = 5
 const toolsByName = new Map(tools.map((tool) => [tool.name, tool]))
+const toolStatusMetadata: Record<string, { invokingText: string; completedText: string }> = {
+  webSearchTool: {
+    invokingText: '正在联网检索相关信息...',
+    completedText: '检索完成，正在整理答案...'
+  },
+  drawImageTool: {
+    invokingText: '正在生成图片，请稍候...',
+    completedText: '图片生成完成，正在整理结果...'
+  }
+}
 const extractedMemorySchema = z.object({
   shouldRemember: z.boolean(),
   memories: z
@@ -255,7 +270,7 @@ async function stringifyToolResult(result: unknown): Promise<string> {
   }
 }
 
-function f(rawToolCalls: unknown): ToolCallLike[] {
+function parseRawToolCalls(rawToolCalls: unknown): ToolCallLike[] {
   if (!Array.isArray(rawToolCalls)) {
     return []
   }
@@ -354,7 +369,7 @@ function extractToolCalls(
     }
   }
 
-  const rawToolCalls = f(
+  const rawToolCalls = parseRawToolCalls(
     (message.additional_kwargs as { tool_calls?: unknown } | undefined)?.tool_calls
   )
 
@@ -378,28 +393,30 @@ function formatToolCallNames(toolCalls: ToolCallLike[]): string {
   return toolCalls.map((toolCall) => toolCall.name || 'unknown').join(', ')
 }
 
-function getToolStatusText(toolCalls: ToolCallLike[]): string {
-  if (toolCalls.some((toolCall) => toolCall.name === 'webSearchTool')) {
-    return '正在联网检索相关信息...'
-  }
-
-  if (toolCalls.some((toolCall) => toolCall.name === 'drawImageTool')) {
-    return '正在生成图片并上传云端...'
-  }
-
-  return '正在调用工具处理问题...'
+function getPrimaryToolName(toolCalls: ToolCallLike[]): string | undefined {
+  return toolCalls.find((toolCall) => toolCall.name)?.name
 }
 
-function getReasoningStatusText(toolCalls: ToolCallLike[]): string {
-  if (toolCalls.some((toolCall) => toolCall.name === 'webSearchTool')) {
-    return '检索完成，正在整理答案...'
+function buildToolStatusPayload(
+  toolCalls: ToolCallLike[],
+  stage: 'tool' | 'reasoning'
+): AssistantStatusPayload {
+  const toolName = getPrimaryToolName(toolCalls)
+  const metadata = toolName ? toolStatusMetadata[toolName] : undefined
+
+  if (stage === 'tool') {
+    return {
+      stage,
+      toolName,
+      text: metadata?.invokingText ?? '正在调用工具处理问题...'
+    }
   }
 
-  if (toolCalls.some((toolCall) => toolCall.name === 'drawImageTool')) {
-    return '图片已生成，正在整理结果...'
+  return {
+    stage,
+    toolName,
+    text: metadata?.completedText ?? '工具执行完成，正在整理答案...'
   }
-
-  return '工具执行完成，正在整理答案...'
 }
 
 function getToolArgsValidationError(
@@ -431,7 +448,7 @@ async function executeToolCalls(
   context: {
     source: 'stream' | 'resolve'
     round: number
-    onStatusChange?: (payload: { stage: 'thinking' | 'tool' | 'reasoning'; text: string }) => void
+    onStatusChange?: (payload: AssistantStatusPayload) => void
   },
   type: string
 ): Promise<ToolMessage[]> {
@@ -442,10 +459,7 @@ async function executeToolCalls(
     dayjs().format('HH:mm:ss')
   )
 
-  context.onStatusChange?.({
-    stage: 'tool',
-    text: getToolStatusText(normalizedToolCalls)
-  })
+  context.onStatusChange?.(buildToolStatusPayload(normalizedToolCalls, 'tool'))
 
   const toolMessages = await Promise.all(
     normalizedToolCalls.map(async (toolCall, index) => {
@@ -506,10 +520,7 @@ async function executeToolCalls(
     })
   )
 
-  context.onStatusChange?.({
-    stage: 'reasoning',
-    text: getReasoningStatusText(normalizedToolCalls)
-  })
+  context.onStatusChange?.(buildToolStatusPayload(normalizedToolCalls, 'reasoning'))
 
   return toolMessages
 }
@@ -517,7 +528,7 @@ async function executeToolCalls(
 async function resolveMessagesForStreaming(
   model: ChatModelWithTools,
   messages: BaseMessage[],
-  onStatusChange?: (payload: { stage: 'thinking' | 'tool' | 'reasoning'; text: string }) => void,
+  onStatusChange?: (payload: AssistantStatusPayload) => void,
   signal?: AbortSignal
 ) {
   const currentMessages: BaseMessage[] = [...messages]
@@ -550,7 +561,7 @@ async function resolveMessagesForStreaming(
 async function* streamAssistantReplyWithTools(
   model: ChatModelWithTools,
   messages: BaseMessage[],
-  onStatusChange?: (payload: { stage: 'thinking' | 'tool' | 'reasoning'; text: string }) => void,
+  onStatusChange?: (payload: AssistantStatusPayload) => void,
   signal?: AbortSignal
 ): AsyncGenerator<string, AIMessageChunk, void> {
   const currentMessages: BaseMessage[] = [...messages]

@@ -8,11 +8,18 @@ export type ConversationSummary = {
   messageCount: number
 }
 
+export type MessageFile = {
+  name: string
+  url: string
+  kind: 'image' | 'file'
+}
+
 export type Message = {
   id: string
   conversationId: string
   role: 'user' | 'assistant' | 'system'
   content: string
+  fileList: MessageFile[]
   status: 'generating' | 'completed' | 'cancelled' | 'failed'
   createdAt: string
   updatedAt: string
@@ -39,6 +46,7 @@ export type CreateMessageInput = {
 export type StreamAssistantStatus = {
   stage: 'thinking' | 'tool' | 'reasoning'
   text: string
+  toolName?: string
 }
 
 export type ModelInfo = {

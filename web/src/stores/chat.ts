@@ -12,7 +12,7 @@ import {
   toggleConversationPin,
   streamMessage
 } from '../api/chat'
-import type { ConversationSummary, Message } from '../types/chat'
+import type { ConversationSummary, Message, StreamAssistantStatus } from '../types/chat'
 
 function sortConversations(conversations: ConversationSummary[]) {
   return [...conversations].sort((left, right) => {
@@ -32,6 +32,7 @@ export const useChatStore = defineStore('chat', () => {
   const isLoadingMessages = ref(false)
   const isSending = ref(false)
   const streamingStatusText = ref('')
+  const streamingStatus = ref<StreamAssistantStatus | null>(null)
   const activeStreamingConversationId = ref('')
   const activeStreamingMessageId = ref('')
 
@@ -77,6 +78,7 @@ export const useChatStore = defineStore('chat', () => {
     activeStreamingMessageId.value = ''
     isSending.value = false
     streamingStatusText.value = ''
+    streamingStatus.value = null
   }
 
   function detachActiveStream() {
@@ -146,11 +148,12 @@ export const useChatStore = defineStore('chat', () => {
 
         void loadConversations()
       },
-      onAssistantStatus(status: { stage: 'thinking' | 'tool' | 'reasoning'; text: string }) {
+      onAssistantStatus(status: StreamAssistantStatus) {
         if (!isCurrentController() || activeConversationId.value !== conversationId) {
           return
         }
 
+        streamingStatus.value = status
         streamingStatusText.value = status.text
       },
       onAssistantDelta(delta: string) {
@@ -162,6 +165,7 @@ export const useChatStore = defineStore('chat', () => {
           return
         }
 
+        streamingStatus.value = null
         streamingStatusText.value = ''
         updateMessage(activeStreamingMessageId.value, (message) => ({
           ...message,
@@ -210,6 +214,10 @@ export const useChatStore = defineStore('chat', () => {
 
     const controller = new AbortController()
     startActiveStreamSubscription(conversationId, controller, generatingMessage.id)
+    streamingStatus.value = {
+      stage: 'thinking',
+      text: generatingMessage.content ? '正在继续输出...' : '正在恢复输出...'
+    }
     streamingStatusText.value = generatingMessage.content ? '' : '正在恢复输出...'
 
     void subscribeMessageStream(
@@ -281,6 +289,10 @@ export const useChatStore = defineStore('chat', () => {
 
     const controller = new AbortController()
     startActiveStreamSubscription(conversationId, controller)
+    streamingStatus.value = {
+      stage: 'thinking',
+      text: '正在思考问题...'
+    }
     streamingStatusText.value = '正在思考问题...'
 
     try {
@@ -388,6 +400,7 @@ export const useChatStore = defineStore('chat', () => {
     isLoadingMessages,
     isSending,
     streamingStatusText,
+    streamingStatus,
     activeStreamingConversationId,
     activeStreamingMessageId,
     loadConversations,
