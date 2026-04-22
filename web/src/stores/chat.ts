@@ -145,8 +145,6 @@ export const useChatStore = defineStore('chat', () => {
         } else {
           clearActiveStream(controller)
         }
-
-        void loadConversations()
       },
       onAssistantStatus(status: StreamAssistantStatus) {
         if (!isCurrentController() || activeConversationId.value !== conversationId) {
@@ -303,7 +301,6 @@ export const useChatStore = defineStore('chat', () => {
         controller.signal
       )
 
-      await loadConversations()
       activeConversationId.value = result.conversationId
       return result
     } catch (error) {
