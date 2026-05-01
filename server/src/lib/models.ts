@@ -14,6 +14,11 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
     id: 'qwen-plus',
     name: 'Qwen Plus',
     description: '适合长文本对话场景'
+  },
+  {
+    id: 'qwen3.6-plus',
+    name: 'Qwen 3.6 Plus',
+    description: '旗舰模型'
   }
 ]
 
