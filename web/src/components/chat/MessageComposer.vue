@@ -11,177 +11,132 @@ const props = defineProps<{
 const emit = defineEmits<{
   submit: [content: string]
   cancel: []
+  audioSubmit: [blob: Blob]
 }>()
 
 const content = ref('')
-const isListening = ref(false)
-const recognitionError = ref('')
-const speechDraftBase = ref('')
-const speechFinalTranscript = ref('')
-const speechInterimTranscript = ref('')
+const isRecording = ref(false)
+const isUploading = ref(false)
+const recordingDuration = ref(0)
 
-let recognition: SpeechRecognition | null = null
+let mediaRecorder: MediaRecorder | null = null
+let audioChunks: Blob[] = []
+let recordingTimer: ReturnType<typeof setInterval> | null = null
+let mediaStream: MediaStream | null = null
 
 const canSubmit = computed(() => content.value.trim().length > 0 && props.loading !== true)
-const isSpeechRecognitionSupported = computed(
-  () =>
-    typeof window !== 'undefined' &&
-    Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
+
+const isMediaRecorderSupported = computed(
+  () => typeof window !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia)
 )
-const speechStatusText = computed(() => {
-  if (recognitionError.value) {
-    return recognitionError.value
-  }
 
-  if (isListening.value) {
-    return '正在听写，语音内容会实时写入输入框'
-  }
-
-  if (!isSpeechRecognitionSupported.value) {
-    return '当前浏览器不支持语音识别'
-  }
-
-  return ''
+const recordingTimerText = computed(() => {
+  const minutes = Math.floor(recordingDuration.value / 60)
+  const seconds = recordingDuration.value % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 })
 
-function getSpeechRecognitionConstructor() {
-  if (typeof window === 'undefined') {
-    return null
+function getRecorderMimeType(): string {
+  if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+    return 'audio/webm;codecs=opus'
   }
 
-  return window.SpeechRecognition || window.webkitSpeechRecognition || null
+  if (MediaRecorder.isTypeSupported('audio/webm')) {
+    return 'audio/webm'
+  }
+
+  if (MediaRecorder.isTypeSupported('audio/mp4')) {
+    return 'audio/mp4'
+  }
+
+  return 'audio/webm'
 }
 
-function mergeDraftContent() {
-  const transcript = `${speechFinalTranscript.value}${speechInterimTranscript.value}`.trim()
+async function startRecording() {
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    audioChunks = []
 
-  if (!speechDraftBase.value) {
-    content.value = transcript
+    const mimeType = getRecorderMimeType()
+    mediaRecorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined)
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        audioChunks.push(event.data)
+      }
+    }
+
+    mediaRecorder.onstop = () => {
+      stopMediaTracks()
+      submitRecording()
+    }
+
+    mediaRecorder.start(250)
+    isRecording.value = true
+
+    recordingDuration.value = 0
+    recordingTimer = setInterval(() => {
+      recordingDuration.value++
+    }, 1000)
+  } catch {
+    ElMessage.error('无法访问麦克风，请在浏览器中允许麦克风权限')
+  }
+}
+
+function stopMediaTracks() {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach((track) => track.stop())
+    mediaStream = null
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop()
+  }
+
+  isRecording.value = false
+
+  if (recordingTimer) {
+    clearInterval(recordingTimer)
+    recordingTimer = null
+  }
+}
+
+function submitRecording() {
+  if (audioChunks.length === 0) {
     return
   }
 
-  content.value = transcript ? `${speechDraftBase.value}\n${transcript}` : speechDraftBase.value
+  const mimeType = mediaRecorder?.mimeType || 'audio/webm'
+  const blob = new Blob(audioChunks, { type: mimeType })
+  audioChunks = []
+
+  isUploading.value = true
+  emit('audioSubmit', blob)
+  isUploading.value = false
 }
 
-function stopRecognition(clearState = false) {
-  if (recognition) {
-    recognition.onstart = null
-    recognition.onresult = null
-    recognition.onerror = null
-    recognition.onend = null
-    recognition.stop()
-    recognition = null
-  }
-
-  isListening.value = false
-
-  if (clearState) {
-    speechDraftBase.value = ''
-    speechFinalTranscript.value = ''
-    speechInterimTranscript.value = ''
-    recognitionError.value = ''
-  }
-}
-
-function mapRecognitionError(error: SpeechRecognitionErrorEvent['error']) {
-  switch (error) {
-    case 'not-allowed':
-    case 'service-not-allowed':
-      return '没有麦克风权限，请在浏览器中允许访问麦克风'
-    case 'audio-capture':
-      return '没有检测到可用的麦克风设备'
-    case 'network':
-      return '语音识别网络异常，请稍后重试'
-    case 'no-speech':
-      return '没有识别到语音，请再试一次'
-    case 'language-not-supported':
-      return '当前浏览器不支持中文语音识别'
-    default:
-      return '语音识别已中断，请重试'
-  }
-}
-
-function handleContentChange(value: string | number) {
-  content.value = typeof value === 'string' ? value : String(value)
-
-  if (!isListening.value) {
-    return
-  }
-
-  speechDraftBase.value = content.value
-  speechFinalTranscript.value = ''
-  speechInterimTranscript.value = ''
-}
-
-function toggleSpeechRecognition() {
+function toggleRecording() {
   if (props.loading) {
     return
   }
 
-  if (isListening.value) {
-    stopRecognition()
-    speechInterimTranscript.value = ''
-    mergeDraftContent()
+  if (isRecording.value) {
+    stopRecording()
     return
   }
 
-  const RecognitionConstructor = getSpeechRecognitionConstructor()
-
-  if (!RecognitionConstructor) {
-    recognitionError.value = '当前浏览器不支持语音识别'
-    ElMessage.warning(recognitionError.value)
+  if (!isMediaRecorderSupported.value) {
+    ElMessage.warning('当前浏览器不支持录音')
     return
   }
 
-  recognitionError.value = ''
-  speechDraftBase.value = content.value.trimEnd()
-  speechFinalTranscript.value = ''
-  speechInterimTranscript.value = ''
+  void startRecording()
+}
 
-  const nextRecognition = new RecognitionConstructor()
-  nextRecognition.lang = 'zh-CN'
-  nextRecognition.continuous = true
-  nextRecognition.interimResults = true
-  nextRecognition.maxAlternatives = 1
-
-  nextRecognition.onstart = () => {
-    isListening.value = true
-  }
-
-  nextRecognition.onresult = (event) => {
-    let finalTranscript = ''
-    let interimTranscript = ''
-
-    for (let index = 0; index < event.results.length; index += 1) {
-      const result = event.results[index]
-      const transcript = result[0]?.transcript ?? ''
-
-      if (result.isFinal) {
-        finalTranscript += transcript
-      } else {
-        interimTranscript += transcript
-      }
-    }
-
-    speechFinalTranscript.value = finalTranscript.trim()
-    speechInterimTranscript.value = interimTranscript.trim()
-    mergeDraftContent()
-  }
-
-  nextRecognition.onerror = (event) => {
-    recognitionError.value = mapRecognitionError(event.error)
-    ElMessage.warning(recognitionError.value)
-  }
-
-  nextRecognition.onend = () => {
-    recognition = null
-    isListening.value = false
-    speechInterimTranscript.value = ''
-    mergeDraftContent()
-  }
-
-  recognition = nextRecognition
-  nextRecognition.start()
+function handleContentChange(value: string | number) {
+  content.value = typeof value === 'string' ? value : String(value)
 }
 
 function handleSubmit() {
@@ -191,13 +146,8 @@ function handleSubmit() {
     return
   }
 
-  stopRecognition(true)
   emit('submit', value)
   content.value = ''
-  speechDraftBase.value = ''
-  speechFinalTranscript.value = ''
-  speechInterimTranscript.value = ''
-  recognitionError.value = ''
 }
 
 function handleCancel() {
@@ -205,7 +155,13 @@ function handleCancel() {
 }
 
 onBeforeUnmount(() => {
-  stopRecognition(true)
+  if (isRecording.value) {
+    stopRecording()
+  }
+
+  if (mediaStream) {
+    stopMediaTracks()
+  }
 })
 </script>
 
@@ -216,19 +172,20 @@ onBeforeUnmount(() => {
       class="composer-input"
       type="textarea"
       resize="none"
-      :readonly="isListening"
       placeholder="输入问题，回车发送，Shift + 回车换行，聊天消息会自动保存到当前会话"
       :autosize="{ minRows: 2, maxRows: 5 }"
       @update:model-value="handleContentChange"
       @keydown.enter.exact.prevent="handleSubmit"
     />
 
-    <div
-      v-if="speechStatusText"
-      class="composer-speech-status"
-      :data-error="Boolean(recognitionError)"
-    >
-      {{ speechStatusText }}
+    <div class="composer-speech-status">
+      <template v-if="isRecording">
+        <span class="recording-indicator" />
+        正在录音 {{ recordingTimerText }}
+      </template>
+      <template v-else-if="isUploading">
+        正在上传语音...
+      </template>
     </div>
 
     <div class="composer-actions">
@@ -237,10 +194,10 @@ onBeforeUnmount(() => {
         class="composer-mic"
         circle
         :icon="Microphone"
-        :type="isListening ? 'warning' : 'default'"
-        :disabled="props.loading || !isSpeechRecognitionSupported"
-        :title="isListening ? '停止语音输入' : '开始语音输入'"
-        @click="toggleSpeechRecognition"
+        :type="isRecording ? 'warning' : 'default'"
+        :disabled="props.loading || !isMediaRecorderSupported"
+        :title="isRecording ? '停止录音' : '开始录音'"
+        @click="toggleRecording"
       />
       <el-button
         v-if="canStop"
@@ -323,13 +280,12 @@ onBeforeUnmount(() => {
   }
 
   &-speech-status {
-    color: #6b7686;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #c13e3e;
     font-size: 12px;
     line-height: 1.4;
-
-    &[data-error='true'] {
-      color: #c13e3e;
-    }
   }
 
   &-hint {
@@ -370,6 +326,26 @@ onBeforeUnmount(() => {
   &-stop {
     border: 0;
     box-shadow: 0 10px 20px rgba(193, 62, 62, 0.18);
+  }
+}
+
+.recording-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #c13e3e;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
   }
 }
 

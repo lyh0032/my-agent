@@ -8,6 +8,7 @@ import {
   fetchConversationDetail,
   fetchConversations,
   renameConversation,
+  streamAudioMessage,
   subscribeMessageStream,
   toggleConversationPin,
   streamMessage
@@ -324,6 +325,54 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  async function sendAudioMessageAction(audioBlob: Blob) {
+    if (!activeConversationId.value) {
+      const conversation = await createConversationAction()
+      activeConversationId.value = conversation.id
+    }
+
+    const conversationId = activeConversationId.value
+    detachActiveStream()
+
+    const controller = new AbortController()
+    startActiveStreamSubscription(conversationId, controller)
+    streamingStatus.value = {
+      stage: 'thinking',
+      text: '正在识别语音...'
+    }
+    streamingStatusText.value = '正在识别语音...'
+
+    try {
+      const result = await streamAudioMessage(
+        conversationId,
+        audioBlob,
+        buildStreamHandlers(conversationId, controller),
+        controller.signal
+      )
+
+      activeConversationId.value = result.conversationId
+      return result
+    } catch (error) {
+      if (isAbortError(error)) {
+        return {
+          conversationId,
+          assistantMessageId: activeStreamingMessageId.value || undefined
+        }
+      }
+
+      throw error
+    } finally {
+      const stillGenerating = messages.value.some(
+        (message) =>
+          message.id === activeStreamingMessageId.value && message.status === 'generating'
+      )
+
+      if (!stillGenerating) {
+        clearActiveStream(controller)
+      }
+    }
+  }
+
   async function stopStreamingAction() {
     const conversationId = activeStreamingConversationId.value || activeConversationId.value
     const messageId = activeStreamingMessageId.value || findGeneratingAssistantMessage()?.id
@@ -404,6 +453,7 @@ export const useChatStore = defineStore('chat', () => {
     createConversation: createConversationAction,
     selectConversation,
     sendMessage: sendMessageAction,
+    sendAudioMessage: sendAudioMessageAction,
     stopStreaming: stopStreamingAction,
     detachActiveStream,
     renameConversation: renameConversationAction,

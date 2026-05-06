@@ -195,6 +195,16 @@ async function handleSendMessage(content: string) {
   }
 }
 
+async function handleAudioSubmit(audioBlob: Blob) {
+  scrollToBottom(false)
+  const hadConversation = Boolean(chatStore.activeConversationId)
+  const result = await chatStore.sendAudioMessage(audioBlob)
+
+  if (!hadConversation) {
+    await router.replace({ path: '/chat', query: { conversationId: result.conversationId } })
+  }
+}
+
 async function handleStopStreaming() {
   await chatStore.stopStreaming()
 }
@@ -337,6 +347,7 @@ async function handleLogout() {
             :can-stop="chatStore.isSending"
             @submit="handleSendMessage"
             @cancel="handleStopStreaming"
+            @audio-submit="handleAudioSubmit"
           />
         </div>
       </footer>
