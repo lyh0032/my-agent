@@ -153,7 +153,7 @@ export async function subscribeMessageStreamController(
   }
 }
 
-export async function streamAudioMessageController(req: Request<MessageParams>, res: Response) {
+export async function transcribeAudioController(req: Request<MessageParams>, res: Response) {
   const file = req.file
 
   if (!file) {
@@ -170,40 +170,7 @@ export async function streamAudioMessageController(req: Request<MessageParams>, 
       : new AppError(502, '语音识别失败', 'AUDIO_TRANSCRIBE_FAILED')
   }
 
-  setupSseHeaders(res)
-  const signal = createConnectionSignal(req, res)
-
-  try {
-    await streamMessage(
-      req.currentUser!.id,
-      req.params.conversationId,
-      { content: transcribedText },
-      buildStreamHandlers(res),
-      signal
-    )
-
-    if (!res.writableEnded) {
-      closeSse(res)
-    }
-  } catch (error) {
-    if (signal.aborted || res.writableEnded) {
-      return
-    }
-
-    const appError =
-      error instanceof AppError
-        ? error
-        : new AppError(500, '流式消息处理失败', 'STREAM_MESSAGE_FAILED')
-
-    safeWriteSseEvent(res, 'error', {
-      message: appError.message,
-      errorCode: appError.errorCode
-    })
-
-    if (!res.writableEnded) {
-      closeSse(res)
-    }
-  }
+  sendSuccess(res, { text: transcribedText }, '语音识别成功')
 }
 
 export async function cancelMessageStreamController(

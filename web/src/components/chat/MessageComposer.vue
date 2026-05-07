@@ -2,16 +2,17 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Microphone, Promotion, VideoPause } from '@element-plus/icons-vue'
+import { transcribeAudio } from '../../api/chat'
 
 const props = defineProps<{
   loading?: boolean
   canStop?: boolean
+  conversationId?: string
 }>()
 
 const emit = defineEmits<{
   submit: [content: string]
   cancel: []
-  audioSubmit: [blob: Blob]
 }>()
 
 const content = ref('')
@@ -103,7 +104,7 @@ function stopRecording() {
   }
 }
 
-function submitRecording() {
+async function submitRecording() {
   if (audioChunks.length === 0) {
     return
   }
@@ -112,9 +113,20 @@ function submitRecording() {
   const blob = new Blob(audioChunks, { type: mimeType })
   audioChunks = []
 
+  if (!props.conversationId) {
+    ElMessage.warning('请先创建或选择一个会话')
+    return
+  }
+
   isUploading.value = true
-  emit('audioSubmit', blob)
-  isUploading.value = false
+  try {
+    const text = await transcribeAudio(props.conversationId, blob)
+    content.value = text
+  } catch {
+    // ElMessage.error('语音识别失败，请重试')
+  } finally {
+    isUploading.value = false
+  }
 }
 
 function toggleRecording() {
@@ -183,9 +195,7 @@ onBeforeUnmount(() => {
         <span class="recording-indicator" />
         正在录音 {{ recordingTimerText }}
       </template>
-      <template v-else-if="isUploading">
-        正在上传语音...
-      </template>
+      <template v-else-if="isUploading"> 正在上传语音... </template>
     </div>
 
     <div class="composer-actions">

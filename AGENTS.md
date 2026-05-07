@@ -133,6 +133,21 @@
 - 参数校验中间件：`server/src/middlewares/validate.ts`
 - HTTP 返回封装：`server/src/utils/http.ts`
 
+### 11. 语音转文字（语音输入）
+- 流程：前端录制音频 → `POST /audio/transcribe` → 后端转写 → 文字回显到输入框，用户确认后手动发送（不自动提交）。
+- ASR 模型：`qwen3-asr-flash`，通过 DashScope OpenAI 兼容接口调用。
+- 后端核心：`server/src/lib/audio.ts` 中的 `transcribeAudio()`。
+- 三层无效语音过滤：
+  - **尺寸过滤**：音频 < 2KB 直接拒绝（`AUDIO_TOO_SHORT`）
+  - **VAD 检测**：请求中带 `enable_voice_detection: true`，依赖模型内置语音活动检测
+  - **文本校验**：`isValidSpeech()` 过滤空结果、单字语气词（啊/呃/嗯/咳等）、重复无意义音节
+- 后端路由：`server/src/modules/messages/message.routes.ts` → `POST /conversations/:conversationId/messages/audio/transcribe`
+- 后端控制器：`server/src/modules/messages/message.controller.ts` → `transcribeAudioController()`
+- 前端 API：`web/src/api/chat.ts` → `transcribeAudio()`
+- 前端录音组件：`web/src/components/chat/MessageComposer.vue` → `submitRecording()` 调用转写 API，结果填入 `content`
+- 前端录音 UI 在 `MessageComposer.vue`，使用 `MediaRecorder` + `getUserMedia`。
+- 注意：旧的流式语音上传（`POST /audio`）和 `sendAudioMessageAction` 已移除，不再使用。
+
 ## 修改原则
 - 不要手改生成产物，除非这次改动就是要调整生成结果本身。
 - 尽量保持在现有的 `server/web` 边界内改动，功能通常只属于其中一个应用。

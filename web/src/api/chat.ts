@@ -225,39 +225,24 @@ export async function subscribeMessageStream(
   }
 }
 
-export async function streamAudioMessage(
+export async function transcribeAudio(
   conversationId: string,
   audioBlob: Blob,
-  handlers: StreamMessageHandlers,
   signal?: AbortSignal
-): Promise<{ conversationId: string; assistantMessageId?: string }> {
-  const state: StreamState = {
-    latestConversationId: conversationId,
-    latestAssistantMessageId: ''
-  }
-
+): Promise<string> {
   const formData = new FormData()
   formData.append('audio', audioBlob, 'recording.webm')
 
-  const response = await fetchWithAuth(`/conversations/${conversationId}/messages/audio`, {
+  const response = await fetchWithAuth(`/conversations/${conversationId}/messages/audio/transcribe`, {
     method: 'POST',
-    headers: {
-      Accept: 'text/event-stream'
-    },
     body: formData,
     signal
   })
 
-  await ensureFetchResponseOk(response, '语音消息请求失败')
+  await ensureFetchResponseOk(response, '语音识别失败')
 
-  await consumeSseStream(response, (parsed) => {
-    applyStreamEvent(parsed, handlers, state, '语音消息请求失败')
-  })
-
-  return {
-    conversationId: state.latestConversationId,
-    assistantMessageId: state.latestAssistantMessageId || undefined
-  }
+  const json = await response.json()
+  return json.data.text
 }
 
 export async function cancelMessageStream(conversationId: string, messageId: string) {

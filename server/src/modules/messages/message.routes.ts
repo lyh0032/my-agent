@@ -8,8 +8,8 @@ import {
   cancelMessageStreamController,
   createMessageController,
   listMessagesController,
-  streamAudioMessageController,
   subscribeMessageStreamController,
+  transcribeAudioController,
   streamMessageController
 } from './message.controller'
 import {
@@ -27,10 +27,9 @@ const router = Router({ mergeParams: true })
 
 router.use(authMiddleware)
 router.post(
-  '/audio',
+  '/audio/transcribe',
   audioUpload.single('audio'),
-  validate({ params: messageParamsSchema }),
-  asyncHandler(streamAudioMessageController)
+  asyncHandler(transcribeAudioController)
 )
 router.get('/', validate({ params: messageParamsSchema }), asyncHandler(listMessagesController))
 router.post(
