@@ -181,6 +181,18 @@ function handleConversationKeywordChange(value: string | number | undefined) {
   conversationKeyword.value = typeof value === 'string' ? value : ''
 }
 
+async function handleEditMessage(messageId: string, content: string) {
+  await chatStore.updateMessage(messageId, content)
+}
+
+async function handleDeleteMessage(messageId: string) {
+  await chatStore.deleteMessage(messageId)
+}
+
+async function handleRenameConversation(conversationId: string, title: string) {
+  await chatStore.renameConversation(conversationId, title)
+}
+
 async function handleTogglePinConversation(conversationId: string, isPinned: boolean) {
   await chatStore.toggleConversationPin(conversationId, isPinned)
 }
@@ -269,6 +281,7 @@ async function handleLogout() {
         :active-conversation-id="chatStore.activeConversationId"
         @select="handleSelectConversation"
         @toggle-pin="handleTogglePinConversation"
+        @rename="handleRenameConversation"
         @delete="handleDeleteConversation"
       />
       <div class="chat-layout-model-selector"></div>
@@ -325,6 +338,8 @@ async function handleLogout() {
               :streaming="chatStore.isSending"
               :thinking-text="chatStore.streamingStatusText"
               :streaming-status="chatStore.streamingStatus"
+              @edit="handleEditMessage"
+              @delete="handleDeleteMessage"
             />
           </section>
         </div>

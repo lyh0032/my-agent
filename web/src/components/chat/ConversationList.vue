@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { nextTick, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import type { ConversationSummary } from '../../types/chat'
-import { ArrowDown, ArrowUp, DeleteFilled } from '@element-plus/icons-vue'
+import { MoreFilled } from '@element-plus/icons-vue'
 
-defineProps<{
+const props = defineProps<{
   conversations: ConversationSummary[]
   activeConversationId: string
 }>()
@@ -11,18 +12,53 @@ defineProps<{
 const emit = defineEmits<{
   select: [conversationId: string]
   togglePin: [conversationId: string, isPinned: boolean]
+  rename: [conversationId: string, title: string]
   delete: [conversationId: string]
 }>()
 
-function onTogglePin(e: PointerEvent, conversation: ConversationSummary) {
-  e.stopPropagation()
-  e.preventDefault()
+const openMenuId = ref('')
+const renamingId = ref('')
+const renamingTitle = ref('')
+const renameInput = ref<HTMLInputElement>()
+
+function toggleMenu(conversationId: string) {
+  openMenuId.value = openMenuId.value === conversationId ? '' : conversationId
+}
+
+function closeMenu() {
+  openMenuId.value = ''
+}
+
+function onTogglePin(conversation: ConversationSummary) {
+  closeMenu()
   emit('togglePin', conversation.id, !conversation.isPinned)
 }
 
-async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
-  e.stopPropagation()
-  e.preventDefault()
+function startRename(conversation: ConversationSummary) {
+  closeMenu()
+  renamingId.value = conversation.id
+  renamingTitle.value = conversation.title
+  nextTick(() => {
+    renameInput.value?.focus()
+    renameInput.value?.select()
+  })
+}
+
+function submitRename() {
+  const title = renamingTitle.value.trim()
+  if (!title) return
+  emit('rename', renamingId.value, title)
+  renamingId.value = ''
+  renamingTitle.value = ''
+}
+
+function cancelRename() {
+  renamingId.value = ''
+  renamingTitle.value = ''
+}
+
+async function onDelete(conversation: ConversationSummary) {
+  closeMenu()
   await ElMessageBox.confirm('确定要删除这个会话吗？', '删除会话', {
     confirmButtonText: '删除',
     cancelButtonText: '取消',
@@ -41,30 +77,49 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
           :key="conversation.id"
           class="conversation-item"
           :class="{ 'conversation-item--active': conversation.id === activeConversationId }"
-          @click="$emit('select', conversation.id)"
+          @click="renamingId !== conversation.id && $emit('select', conversation.id)"
         >
           <div class="conversation-item-left">
             <div class="conversation-item-title-row">
               <span v-if="conversation.isPinned" class="conversation-item-pin-tag">已置顶</span>
-              <span class="conversation-item-title">{{ conversation.title }}</span>
+              <template v-if="renamingId === conversation.id">
+                <input
+                  v-model="renamingTitle"
+                  class="conversation-item-rename-input"
+                  @keyup.enter="submitRename"
+                  @keyup.escape="cancelRename"
+                  @blur="submitRename"
+                  @click.stop
+                  ref="renameInput"
+                />
+              </template>
+              <span v-else class="conversation-item-title">{{ conversation.title }}</span>
             </div>
             <span class="conversation-item-preview">{{
               conversation.lastMessagePreview || '暂无消息'
             }}</span>
           </div>
-          <div class="conversation-item-right">
+          <div class="conversation-item-right" @click.stop>
             <el-button
-              :icon="conversation.isPinned ? ArrowDown : ArrowUp"
+              :icon="MoreFilled"
               text
               size="small"
-              @click="onTogglePin($event, conversation)"
+              @click="toggleMenu(conversation.id)"
             ></el-button>
-            <el-button
-              :icon="DeleteFilled"
-              text
-              size="small"
-              @click="onDelete($event, conversation)"
-            ></el-button>
+            <div
+              v-if="openMenuId === conversation.id"
+              class="conversation-item-menu"
+            >
+              <button class="conversation-item-menu-item" @click="onTogglePin(conversation)">
+                {{ conversation.isPinned ? '取消置顶' : '置顶' }}
+              </button>
+              <button class="conversation-item-menu-item" @click="startRename(conversation)">
+                重命名
+              </button>
+              <button class="conversation-item-menu-item conversation-item-menu-item--danger" @click="onDelete(conversation)">
+                删除
+              </button>
+            </div>
           </div>
         </div>
       </template>
@@ -108,7 +163,7 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
   text-align: left;
   cursor: pointer;
   display: flex;
-  overflow: hidden;
+  overflow: visible;
   background: rgba(18, 52, 88, 0.08);
 
   &-left {
@@ -119,16 +174,6 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
     overflow: hidden;
   }
 
-  &-right {
-    display: none;
-    margin-left: 12px;
-
-    > span {
-      color: #ff4d4f;
-      font-size: 14px;
-    }
-  }
-
   &-title-row {
     display: flex;
     align-items: center;
@@ -137,6 +182,11 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
   }
 
   &-right {
+    display: none;
+    margin-left: 12px;
+    position: relative;
+    flex-shrink: 0;
+
     .el-button {
       padding: 0 6px;
       margin: 0;
@@ -178,6 +228,59 @@ async function onDelete(e: PointerEvent, conversation: ConversationSummary) {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+
+  &-rename-input {
+    flex: 1;
+    min-width: 0;
+    padding: 4px 8px;
+    border: 1px solid rgba(18, 52, 88, 0.2);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    outline: none;
+    background: rgba(255, 255, 255, 0.6);
+
+    &:focus {
+      border-color: #123458;
+    }
+  }
+
+  &-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 10;
+    min-width: 120px;
+    padding: 4px;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 4px 20px rgba(18, 52, 88, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &-menu-item {
+    all: unset;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #324155;
+
+    &:hover {
+      background: rgba(18, 52, 88, 0.06);
+    }
+
+    &--danger {
+      color: #e74c3c;
+
+      &:hover {
+        background: rgba(231, 76, 60, 0.08);
+      }
+    }
   }
 }
 

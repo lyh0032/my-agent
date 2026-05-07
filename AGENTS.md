@@ -148,6 +148,26 @@
 - 前端录音 UI 在 `MessageComposer.vue`，使用 `MediaRecorder` + `getUserMedia`。
 - 注意：旧的流式语音上传（`POST /audio`）和 `sendAudioMessageAction` 已移除，不再使用。
 
+### 12. 消息编辑/删除
+- 编辑流程：前端限制仅最后一条用户消息可编辑 → `PATCH /conversations/:conversationId/messages/:messageId` → 后端原子性更新内容 + 删除该消息之后的全部消息 → 前端自动截断本地列表并调用 `regenerate` 重新生成 AI 回复。
+- 删除：任何非生成中的消息均可删除，确认弹窗后调用 `DELETE /conversations/:conversationId/messages/:messageId`，仅删除单条。
+- **编辑权限（前端）**：`web/src/components/chat/MessageList.vue` 中的 `canEdit()`，只有 `messages` 数组中最后一条 `role === 'user'` 的消息才显示编辑按钮。
+- 后端核心服务：`server/src/modules/messages/message.service.ts` → `updateMessage()`（编辑+删后续）、`regenerateMessage()`（基于已编辑消息新建 assistant 并流式输出）。
+- 后端新增路由：
+  - `PATCH /:messageId` — 编辑消息（限 user 角色、completed 状态）
+  - `DELETE /:messageId` — 删除单条消息
+  - `POST /:messageId/regenerate` — SSE 流式重新生成（用于编辑后自动调用）
+- 前端 API：`web/src/api/chat.ts` → `updateMessage()`、`deleteMessage()`、`regenerateMessage()`（SSE）。
+- 前端状态管理：`web/src/stores/chat.ts` → `chatStore.updateMessage()` 编排编辑→截断→重新生成的完整流程。
+- 前端消息列表：`web/src/components/chat/MessageList.vue` → 编辑（内联 textarea + 保存/取消）、删除（hover 图标按钮；触摸设备常驻）。
+
+### 13. 会话重命名
+- 侧边栏会话列表原本并排放置"置顶"和"删除"两个按钮，现改为单个「更多」按钮（`MoreFilled` 图标），点击展开浮层菜单：`置顶/取消置顶`、`重命名`、`删除`。
+- 点击"重命名" → 自动聚焦 + 全选当前标题 → 内联输入框，回车或失焦提交，Esc 取消。
+- 后端 API 无新增（沿用已有的 `PATCH /api/conversations/:conversationId`）。
+- 前端组件：`web/src/components/chat/ConversationList.vue` → `startRename()` + `submitRename()`，`nextTick` 中 auto-focus。
+- 前端事件链路：`ConversationList @rename` → `ChatView handleRenameConversation` → `chatStore.renameConversation()`。
+
 ## 修改原则
 - 不要手改生成产物，除非这次改动就是要调整生成结果本身。
 - 尽量保持在现有的 `server/web` 边界内改动，功能通常只属于其中一个应用。

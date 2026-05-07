@@ -3,9 +3,12 @@ import type { Request, Response } from 'express'
 import {
   cancelMessageStream,
   createMessage,
+  deleteMessage,
   listMessages,
+  regenerateMessage,
   streamMessage,
-  subscribeMessageStream
+  subscribeMessageStream,
+  updateMessage
 } from './message.service'
 import { transcribeAudio } from '../../lib/audio'
 import { sendSuccess } from '../../utils/http'
@@ -191,4 +194,69 @@ export async function cancelMessageStreamController(
     },
     '停止生成成功'
   )
+}
+
+export async function updateMessageController(
+  req: Request<{ conversationId: string; messageId: string }>,
+  res: Response
+) {
+  const message = await updateMessage(
+    req.currentUser!.id,
+    req.params.conversationId,
+    req.params.messageId,
+    req.body
+  )
+  sendSuccess(res, message, '消息编辑成功')
+}
+
+export async function deleteMessageController(
+  req: Request<{ conversationId: string; messageId: string }>,
+  res: Response
+) {
+  await deleteMessage(
+    req.currentUser!.id,
+    req.params.conversationId,
+    req.params.messageId
+  )
+  sendSuccess(res, null, '消息删除成功')
+}
+
+export async function regenerateMessageController(
+  req: Request<{ conversationId: string; messageId: string }>,
+  res: Response
+) {
+  setupSseHeaders(res)
+  const signal = createConnectionSignal(req, res)
+
+  try {
+    await regenerateMessage(
+      req.currentUser!.id,
+      req.params.conversationId,
+      req.params.messageId,
+      buildStreamHandlers(res),
+      signal
+    )
+
+    if (!res.writableEnded) {
+      closeSse(res)
+    }
+  } catch (error) {
+    if (signal.aborted || res.writableEnded) {
+      return
+    }
+
+    const appError =
+      error instanceof AppError
+        ? error
+        : new AppError(500, '重新生成失败', 'REGENERATE_MESSAGE_FAILED')
+
+    safeWriteSseEvent(res, 'error', {
+      message: appError.message,
+      errorCode: appError.errorCode
+    })
+
+    if (!res.writableEnded) {
+      closeSse(res)
+    }
+  }
 }

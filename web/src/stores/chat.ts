@@ -5,12 +5,15 @@ import {
   cancelMessageStream,
   createConversation,
   deleteConversation,
+  deleteMessage as deleteMessageApi,
   fetchConversationDetail,
   fetchConversations,
+  regenerateMessage,
   renameConversation,
   subscribeMessageStream,
   toggleConversationPin,
-  streamMessage
+  streamMessage,
+  updateMessage as updateMessageApi
 } from '../api/chat'
 import type { ConversationSummary, Message, StreamAssistantStatus } from '../types/chat'
 
@@ -388,6 +391,56 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  async function updateMessageAction(messageId: string, content: string) {
+    if (!activeConversationId.value) return
+    const conversationId = activeConversationId.value
+
+    const updated = await updateMessageApi(conversationId, messageId, content)
+
+    const editedIndex = messages.value.findIndex((m) => m.id === messageId)
+    if (editedIndex === -1) return
+
+    messages.value = [
+      ...messages.value.slice(0, editedIndex),
+      updated
+    ]
+
+    detachActiveStream()
+
+    const controller = new AbortController()
+    startActiveStreamSubscription(conversationId, controller)
+    streamingStatus.value = {
+      stage: 'thinking',
+      text: '正在根据编辑内容重新生成...'
+    }
+    streamingStatusText.value = '正在根据编辑内容重新生成...'
+
+    try {
+      await regenerateMessage(
+        conversationId,
+        messageId,
+        buildStreamHandlers(conversationId, controller),
+        controller.signal
+      )
+    } catch (error) {
+      if (isAbortError(error)) return
+      throw error
+    } finally {
+      const stillGenerating = messages.value.some(
+        (m) => m.id === activeStreamingMessageId.value && m.status === 'generating'
+      )
+      if (!stillGenerating) {
+        clearActiveStream(controller)
+      }
+    }
+  }
+
+  async function deleteMessageAction(messageId: string) {
+    if (!activeConversationId.value) return
+    await deleteMessageApi(activeConversationId.value, messageId)
+    messages.value = messages.value.filter((m) => m.id !== messageId)
+  }
+
   return {
     conversations,
     activeConversationId,
@@ -408,6 +461,8 @@ export const useChatStore = defineStore('chat', () => {
     detachActiveStream,
     renameConversation: renameConversationAction,
     toggleConversationPin: toggleConversationPinAction,
-    deleteConversation: deleteConversationAction
+    deleteConversation: deleteConversationAction,
+    updateMessage: updateMessageAction,
+    deleteMessage: deleteMessageAction
   }
 })

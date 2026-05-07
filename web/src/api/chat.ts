@@ -245,10 +245,63 @@ export async function transcribeAudio(
   return json.data.text
 }
 
+export async function regenerateMessage(
+  conversationId: string,
+  messageId: string,
+  handlers: StreamMessageHandlers,
+  signal?: AbortSignal
+): Promise<{ conversationId: string; assistantMessageId?: string }> {
+  const state: StreamState = {
+    latestConversationId: conversationId,
+    latestAssistantMessageId: ''
+  }
+
+  const response = await fetchWithAuth(
+    `/conversations/${conversationId}/messages/${messageId}/regenerate`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'text/event-stream'
+      },
+      signal
+    }
+  )
+
+  await ensureFetchResponseOk(response, '重新生成请求失败')
+
+  await consumeSseStream(response, (parsed) => {
+    applyStreamEvent(parsed, handlers, state, '重新生成请求失败')
+  })
+
+  return {
+    conversationId: state.latestConversationId,
+    assistantMessageId: state.latestAssistantMessageId || undefined
+  }
+}
+
 export async function cancelMessageStream(conversationId: string, messageId: string) {
   const response = await http.post<
     ApiResponse<{ assistantMessage: Message; conversationId: string }>
   >(`/conversations/${conversationId}/messages/${messageId}/cancel`)
 
   return response.data.data
+}
+
+export async function updateMessage(
+  conversationId: string,
+  messageId: string,
+  content: string
+): Promise<Message> {
+  const response = await http.patch<ApiResponse<Message>>(
+    `/conversations/${conversationId}/messages/${messageId}`,
+    { content }
+  )
+  return response.data.data
+}
+
+export async function deleteMessage(
+  conversationId: string,
+  messageId: string
+): Promise<void> {
+  await http.delete(`/conversations/${conversationId}/messages/${messageId}`)
 }

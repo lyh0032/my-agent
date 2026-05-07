@@ -7,15 +7,22 @@ import { asyncHandler } from '../../utils/async-handler'
 import {
   cancelMessageStreamController,
   createMessageController,
+  deleteMessageController,
   listMessagesController,
+  regenerateMessageController,
   subscribeMessageStreamController,
   transcribeAudioController,
-  streamMessageController
+  streamMessageController,
+  updateMessageController
 } from './message.controller'
 import {
   createMessageBodySchema,
+  deleteMessageParamsSchema,
   messageParamsSchema,
-  messageStreamParamsSchema
+  messageStreamParamsSchema,
+  regenerateMessageParamsSchema,
+  updateMessageBodySchema,
+  updateMessageParamsSchema
 } from './message.schema'
 
 const audioUpload = multer({
@@ -51,6 +58,21 @@ router.post(
   '/',
   validate({ params: messageParamsSchema, body: createMessageBodySchema }),
   asyncHandler(createMessageController)
+)
+router.patch(
+  '/:messageId',
+  validate({ params: updateMessageParamsSchema, body: updateMessageBodySchema }),
+  asyncHandler(updateMessageController)
+)
+router.delete(
+  '/:messageId',
+  validate({ params: deleteMessageParamsSchema }),
+  asyncHandler(deleteMessageController)
+)
+router.post(
+  '/:messageId/regenerate',
+  validate({ params: regenerateMessageParamsSchema }),
+  asyncHandler(regenerateMessageController)
 )
 
 export { router as messageRouter }

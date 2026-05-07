@@ -6,7 +6,8 @@ import {
   renderMarkdownWithoutFileLinks,
   type MarkdownImageAsset
 } from '../../utils/markdown'
-import { dayjs } from 'element-plus'
+import { dayjs, ElMessage, ElMessageBox } from 'element-plus'
+import { EditPen, Delete } from '@element-plus/icons-vue'
 
 const props = defineProps<{
   messages: Message[]
@@ -14,6 +15,54 @@ const props = defineProps<{
   thinkingText?: string
   streamingStatus?: StreamAssistantStatus | null
 }>()
+
+const emit = defineEmits<{
+  edit: [messageId: string, content: string]
+  delete: [messageId: string]
+}>()
+
+const editingMessageId = ref('')
+const editingContent = ref('')
+
+function startEdit(message: Message) {
+  editingMessageId.value = message.id
+  editingContent.value = message.content
+}
+
+function cancelEdit() {
+  editingMessageId.value = ''
+  editingContent.value = ''
+}
+
+function saveEdit() {
+  const content = editingContent.value.trim()
+  if (!content) {
+    ElMessage.warning('消息内容不能为空')
+    return
+  }
+  emit('edit', editingMessageId.value, content)
+  editingMessageId.value = ''
+  editingContent.value = ''
+}
+
+async function handleDelete(message: Message) {
+  await ElMessageBox.confirm('确定要删除这条消息吗？', '删除消息', {
+    confirmButtonText: '删除',
+    cancelButtonText: '取消',
+    type: 'warning'
+  })
+  emit('delete', message.id)
+}
+
+function canEdit(message: Message) {
+  if (message.role !== 'user' || message.status !== 'completed') return false
+  const lastUserMessage = [...props.messages].reverse().find((m) => m.role === 'user')
+  return lastUserMessage?.id === message.id
+}
+
+function canDelete(message: Message) {
+  return message.status !== 'generating'
+}
 
 const toolStatusMetaMap: Record<string, { label: string; tone: 'tool' | 'search' | 'image' }> = {
   webSearchTool: {
@@ -158,77 +207,111 @@ function showMessageStatusPlaceholder(message: Message) {
     <p>输入你的问题，系统会保存会话和消息历史。</p>
   </div>
   <div v-else class="message-list">
-    <article
-      v-for="message in messages"
-      :key="message.id"
-      class="message-bubble"
-      :class="`message-bubble--${message.role}`"
-    >
-      <span class="message-bubble-role">
-        {{ roleLabelMap[message.role] }}
-        <span class="message-bubble-time">{{
-          dayjs(message.createdAt).format('YYYY-MM-DD HH:mm:ss')
-        }}</span>
-        <span
-          v-if="message.role === 'assistant' && message.status !== 'completed'"
-          class="message-bubble-status"
-        >
-          {{ messageStatusLabelMap[message.status] }}
+      <article
+        v-for="message in messages"
+        :key="message.id"
+        class="message-bubble"
+        :class="`message-bubble--${message.role}`"
+      >
+        <span class="message-bubble-role">
+          {{ roleLabelMap[message.role] }}
+          <span class="message-bubble-time">{{
+            dayjs(message.createdAt).format('YYYY-MM-DD HH:mm:ss')
+          }}</span>
+          <span
+            v-if="message.role === 'assistant' && message.status !== 'completed'"
+            class="message-bubble-status"
+          >
+            {{ messageStatusLabelMap[message.status] }}
+          </span>
         </span>
-      </span>
-      <div v-if="showInlineStatus(message)" class="message-bubble-inline-status">
-        <span
-          v-if="activeToolMeta"
-          class="message-bubble-tool-chip"
-          :class="`message-bubble-tool-chip--${activeToolMeta.tone}`"
-        >
-          调用{{ activeToolMeta.label }}工具中
-        </span>
-        <span v-if="showInlineStatusText(message)" class="message-bubble-inline-status-text">
-          {{ props.streamingStatus?.text }}
-        </span>
-      </div>
-      <div
-        v-if="showMessageContent(message)"
-        class="message-bubble-content"
-        v-html="
-          message.role !== 'user'
-            ? renderedContent(message)
-            : `<div style='white-space: pre-wrap;'>${message.content}</div>`
-        "
-      ></div>
-      <div v-if="showMessageStatusPlaceholder(message)" class="message-bubble-status-placeholder">
-        <span class="message-bubble-status-placeholder-text">{{
-          props.streamingStatus?.text
-        }}</span>
-        <span class="message-bubble-thinking-dots" aria-hidden="true">
-          <i></i>
-          <i></i>
-          <i></i>
-        </span>
-      </div>
-      <div v-if="getMessageImages(message).length > 0" class="message-bubble-gallery">
-        <figure
-          v-for="(image, index) in getMessageImages(message)"
-          :key="`${message.id}-${image.url}-${index}`"
-          class="message-bubble-gallery-card"
-        >
-          <img
-            class="message-bubble-gallery-img"
-            :src="image.url"
-            :alt="image.alt || '生成图片'"
-            loading="lazy"
-          />
-          <figcaption class="message-bubble-gallery-caption">
-            {{ image.alt || image.title || '生成图片' }}
-          </figcaption>
-          <div class="message-bubble-gallery-actions">
-            <button type="button" @click="downloadImage(image, message, index)">下载</button>
+        <div v-if="editingMessageId !== message.id" class="message-bubble-actions">
+          <button
+            v-if="canEdit(message)"
+            class="message-bubble-action-btn"
+            title="编辑"
+            @click="startEdit(message)"
+          >
+            <el-icon><EditPen /></el-icon>
+          </button>
+          <button
+            v-if="canDelete(message)"
+            class="message-bubble-action-btn"
+            title="删除"
+            @click="handleDelete(message)"
+          >
+            <el-icon><Delete /></el-icon>
+          </button>
+        </div>
+        <div v-if="showInlineStatus(message)" class="message-bubble-inline-status">
+          <span
+            v-if="activeToolMeta"
+            class="message-bubble-tool-chip"
+            :class="`message-bubble-tool-chip--${activeToolMeta.tone}`"
+          >
+            调用{{ activeToolMeta.label }}工具中
+          </span>
+          <span v-if="showInlineStatusText(message)" class="message-bubble-inline-status-text">
+            {{ props.streamingStatus?.text }}
+          </span>
+        </div>
+        <template v-if="editingMessageId === message.id">
+          <textarea
+            v-model="editingContent"
+            class="message-bubble-edit-textarea"
+            rows="4"
+          ></textarea>
+          <div class="message-bubble-edit-actions">
+            <el-button size="small" type="primary" @click="saveEdit">保存</el-button>
+            <el-button size="small" @click="cancelEdit">取消</el-button>
           </div>
-        </figure>
-      </div>
-      <span v-if="showStreamingCursor(message)" class="message-bubble-cursor"></span>
-    </article>
+        </template>
+        <template v-else>
+          <div
+            v-if="showMessageContent(message)"
+            class="message-bubble-content"
+            v-html="
+              message.role !== 'user'
+                ? renderedContent(message)
+                : `<div style='white-space: pre-wrap;'>${message.content}</div>`
+            "
+          ></div>
+          <div
+            v-if="showMessageStatusPlaceholder(message)"
+            class="message-bubble-status-placeholder"
+          >
+            <span class="message-bubble-status-placeholder-text">{{
+              props.streamingStatus?.text
+            }}</span>
+            <span class="message-bubble-thinking-dots" aria-hidden="true">
+              <i></i>
+              <i></i>
+              <i></i>
+            </span>
+          </div>
+          <div v-if="getMessageImages(message).length > 0" class="message-bubble-gallery">
+            <figure
+              v-for="(image, index) in getMessageImages(message)"
+              :key="`${message.id}-${image.url}-${index}`"
+              class="message-bubble-gallery-card"
+            >
+              <img
+                class="message-bubble-gallery-img"
+                :src="image.url"
+                :alt="image.alt || '生成图片'"
+                loading="lazy"
+              />
+              <figcaption class="message-bubble-gallery-caption">
+                {{ image.alt || image.title || '生成图片' }}
+              </figcaption>
+              <div class="message-bubble-gallery-actions">
+                <button type="button" @click="downloadImage(image, message, index)">下载</button>
+              </div>
+            </figure>
+          </div>
+          <span v-if="showStreamingCursor(message)" class="message-bubble-cursor"></span>
+        </template>
+      </article>
     <article
       v-if="showThinkingBubble"
       class="message-bubble message-bubble--assistant message-bubble--thinking"
@@ -271,6 +354,7 @@ function showMessageStatusPlaceholder(message: Message) {
 }
 
 .message-bubble {
+  position: relative;
   max-width: 760px;
   max-width: 100%;
   padding: 16px 18px;
@@ -555,11 +639,74 @@ function showMessageStatusPlaceholder(message: Message) {
       }
     }
   }
+
+  &-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: none;
+    gap: 4px;
+  }
+
+  &:hover &-actions {
+    display: flex;
+  }
+
+  &-action-btn {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(18, 52, 88, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.85);
+    color: #5f6774;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+
+    &:hover {
+      background: #fff;
+      color: #123458;
+    }
+  }
+
+  &-edit-textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid rgba(18, 52, 88, 0.2);
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.6;
+    resize: vertical;
+    background: rgba(255, 255, 255, 0.6);
+    color: inherit;
+    outline: none;
+    box-sizing: border-box;
+
+    &:focus {
+      border-color: #123458;
+    }
+  }
+
+  &-edit-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
 }
 
 @keyframes blink {
   50% {
     opacity: 0;
+  }
+}
+
+@media (hover: none), (max-width: 960px) {
+  .message-bubble-actions {
+    display: flex;
   }
 }
 

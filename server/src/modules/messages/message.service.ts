@@ -14,7 +14,7 @@ import {
   updateConversation
 } from '../conversations/conversation.service'
 import { getModelNameForLLM } from '../model-preferences/model-preference.service'
-import type { CreateMessageBody } from './message.schema'
+import type { CreateMessageBody, UpdateMessageBody } from './message.schema'
 
 const STREAM_PERSIST_INTERVAL_MS = 400
 const STREAM_PERSIST_MIN_CHARS = 80
@@ -724,6 +724,149 @@ export async function subscribeMessageStream(
     conversationId,
     assistantMessageId: messageId
   }
+}
+
+export async function updateMessage(
+  userId: string,
+  conversationId: string,
+  messageId: string,
+  data: UpdateMessageBody
+) {
+  await ensureConversationOwnership(userId, conversationId)
+
+  const message = await prisma.message.findFirst({
+    where: { id: messageId, conversationId }
+  })
+
+  if (!message) {
+    throw new AppError(404, '消息不存在', 'NOT_FOUND')
+  }
+
+  if (message.role !== 'user') {
+    throw new AppError(400, '只能编辑用户消息', 'CANNOT_EDIT_ASSISTANT_MESSAGE')
+  }
+
+  if (message.status !== MessageStatus.completed) {
+    throw new AppError(400, '只能编辑已完成的消息', 'CANNOT_EDIT_GENERATING_MESSAGE')
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const msg = await tx.message.update({
+      where: { id: messageId },
+      data: { content: data.content }
+    })
+
+    await tx.message.deleteMany({
+      where: {
+        conversationId,
+        createdAt: { gt: msg.createdAt }
+      }
+    })
+
+    return msg
+  })
+
+  return serializeMessageForClient(updated)
+}
+
+export async function regenerateMessage(
+  userId: string,
+  conversationId: string,
+  messageId: string,
+  handlers: StreamMessageHandlers,
+  signal?: AbortSignal
+) {
+  await ensureConversationOwnership(userId, conversationId)
+
+  const userMessage = await prisma.message.findFirst({
+    where: { id: messageId, conversationId, role: 'user' }
+  })
+
+  if (!userMessage) {
+    throw new AppError(404, '用户消息不存在', 'NOT_FOUND')
+  }
+
+  await ensureNoGeneratingMessage(conversationId)
+
+  const assistantMessage = await prisma.message.create({
+    data: {
+      conversationId,
+      role: 'assistant',
+      content: '',
+      status: MessageStatus.generating
+    }
+  })
+
+  handlers.onAssistantMessage?.(serializeMessageForClient(assistantMessage))
+
+  const { history, memories, memoryContext } = await loadMessageGenerationContext(
+    userId,
+    conversationId
+  )
+  const preferredModel = await getModelNameForLLM(userId)
+  const conversationMetadataTask = scheduleConversationMetadataUpdate(userId, conversationId)
+
+  try {
+    const task = createStreamTask({
+      assistantMessage,
+      userId,
+      latestUserMessage: userMessage.content,
+      existingMemories: memories,
+      modelOverride: preferredModel,
+      memoryContext,
+      conversationHistory: history
+        .filter((m) => m.id !== assistantMessage.id)
+        .map((m) => ({
+          role: m.role,
+          content: m.content
+        })),
+      conversationMetadataTask
+    })
+
+    await waitForTaskSubscription(task, handlers, signal)
+  } catch (error) {
+    const failed = await prisma.message.update({
+      where: { id: assistantMessage.id },
+      data: { status: MessageStatus.failed }
+    })
+
+    handlers.onAssistantFailed?.({
+      assistantMessage: serializeMessageForClient(failed),
+      conversationId,
+      message: error instanceof Error ? error.message : '流式消息处理失败'
+    })
+
+    throw error
+  }
+
+  return {
+    conversationId,
+    assistantMessageId: assistantMessage.id
+  }
+}
+
+export async function deleteMessage(
+  userId: string,
+  conversationId: string,
+  messageId: string
+) {
+  await ensureConversationOwnership(userId, conversationId)
+
+  const message = await prisma.message.findFirst({
+    where: { id: messageId, conversationId }
+  })
+
+  if (!message) {
+    throw new AppError(404, '消息不存在', 'NOT_FOUND')
+  }
+
+  if (message.status === MessageStatus.generating) {
+    throw new AppError(400, '无法删除正在生成中的消息', 'CANNOT_DELETE_GENERATING_MESSAGE')
+  }
+
+  await prisma.message.delete({
+    where: { id: messageId }
+  })
 }
 
 export async function cancelMessageStream(
