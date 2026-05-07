@@ -591,7 +591,7 @@ async function* streamAssistantReplyWithTools(
     const toolCalls = extractToolCalls(fullChunk)
 
     if (!toolCalls.length) {
-      if (!emittedTextInRound && hasToolCallSignals(fullChunk)) {
+      if (hasToolCallSignals(fullChunk)) {
         console.log(
           `[stream] 流式工具调用片段不完整，改用 invoke 补全工具调用，第 ${round + 1} 轮`,
           dayjs().format('HH:mm:ss')
