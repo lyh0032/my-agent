@@ -59,13 +59,34 @@ export async function listConversations(userId: string) {
 }
 
 export async function createConversation(userId: string, data: CreateConversationBody) {
-  return prisma.conversation.create({
+  const latest = await prisma.conversation.findFirst({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    include: { _count: { select: { messages: true } } }
+  })
+
+  if (latest && latest._count.messages === 0) {
+    return {
+      conversation: {
+        id: latest.id,
+        title: latest.title,
+        isPinned: latest.isPinned,
+        createdAt: latest.createdAt,
+        updatedAt: latest.updatedAt
+      },
+      existed: true
+    }
+  }
+
+  const conversation = await prisma.conversation.create({
     data: {
       userId,
       title: buildConversationTitle(data.title)
     },
     select: conversationSummarySelect
   })
+
+  return { conversation, existed: false }
 }
 
 export async function getConversationDetail(userId: string, conversationId: string) {

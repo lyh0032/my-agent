@@ -140,11 +140,14 @@ function closeSidebar() {
 }
 
 async function handleCreateConversation() {
-  const conversation = await chatStore.createConversation()
+  const result = await chatStore.createConversation()
+  if (result.existed) {
+    ElMessage.info('当前已有一个新会话，可直接使用')
+  }
   await router.push({
     path: '/chat',
     query: {
-      conversationId: conversation.id
+      conversationId: result.conversation.id
     }
   })
   closeSidebar()

@@ -39,6 +39,11 @@ export type CreateConversationInput = {
   initialMessage?: string
 }
 
+export type CreateConversationResponse = {
+  conversation: ConversationSummary
+  existed: boolean
+}
+
 export type CreateMessageInput = {
   content: string
 }

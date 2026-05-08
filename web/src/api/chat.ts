@@ -3,6 +3,7 @@ import type {
   ConversationDetail,
   ConversationSummary,
   CreateConversationInput,
+  CreateConversationResponse,
   CreateMessageInput,
   Message,
   StreamAssistantStatus
@@ -99,8 +100,8 @@ export async function fetchConversations(): Promise<ConversationSummary[]> {
 
 export async function createConversation(
   input: CreateConversationInput
-): Promise<ConversationSummary> {
-  const response = await http.post<ApiResponse<ConversationSummary>>('/conversations', input)
+): Promise<CreateConversationResponse> {
+  const response = await http.post<ApiResponse<CreateConversationResponse>>('/conversations', input)
   return response.data.data
 }
 

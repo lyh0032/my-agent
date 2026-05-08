@@ -15,7 +15,12 @@ import {
   streamMessage,
   updateMessage as updateMessageApi
 } from '../api/chat'
-import type { ConversationSummary, Message, StreamAssistantStatus } from '../types/chat'
+import type {
+  ConversationSummary,
+  CreateConversationResponse,
+  Message,
+  StreamAssistantStatus
+} from '../types/chat'
 
 export const useChatStore = defineStore('chat', () => {
   const conversations = ref<ConversationSummary[]>([])
@@ -248,12 +253,16 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function createConversationAction(initialMessage?: string) {
-    const conversation = await createConversation({ initialMessage })
-    conversations.value = [conversation, ...conversations.value]
-    activeConversationId.value = conversation.id
+  async function createConversationAction(
+    initialMessage?: string
+  ): Promise<CreateConversationResponse> {
+    const result = await createConversation({ initialMessage })
+    if (!result.existed) {
+      conversations.value = [result.conversation, ...conversations.value]
+    }
+    activeConversationId.value = result.conversation.id
     messages.value = []
-    return conversation
+    return result
   }
 
   async function selectConversation(conversationId: string) {
@@ -271,8 +280,8 @@ export const useChatStore = defineStore('chat', () => {
 
   async function sendMessageAction(content: string) {
     if (!activeConversationId.value) {
-      const conversation = await createConversationAction(content)
-      activeConversationId.value = conversation.id
+      const result = await createConversationAction(content)
+      activeConversationId.value = result.conversation.id
     }
 
     const conversationId = activeConversationId.value

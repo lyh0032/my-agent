@@ -20,8 +20,12 @@ export async function listConversationsController(req: Request, res: Response) {
 }
 
 export async function createConversationController(req: Request, res: Response) {
-  const conversation = await createConversation(req.currentUser!.id, req.body)
-  sendSuccess(res, conversation, '创建会话成功', 201)
+  const { conversation, existed } = await createConversation(req.currentUser!.id, req.body)
+  if (existed) {
+    sendSuccess(res, { conversation, existed: true }, '已切换到现有会话', 200)
+  } else {
+    sendSuccess(res, { conversation, existed: false }, '创建会话成功', 201)
+  }
 }
 
 export async function getConversationDetailController(
