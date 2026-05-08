@@ -16,49 +16,45 @@ const emit = defineEmits<{
   delete: [conversationId: string]
 }>()
 
-const openMenuId = ref('')
-const renamingId = ref('')
-const renamingTitle = ref('')
-const renameInput = ref<HTMLInputElement>()
+const visiblePopoverId = ref('')
+const renamePopoverId = ref('')
+const renameTitle = ref('')
 
-function toggleMenu(conversationId: string) {
-  openMenuId.value = openMenuId.value === conversationId ? '' : conversationId
-}
-
-function closeMenu() {
-  openMenuId.value = ''
+function closePopover() {
+  visiblePopoverId.value = ''
 }
 
 function onTogglePin(conversation: ConversationSummary) {
-  closeMenu()
+  closePopover()
   emit('togglePin', conversation.id, !conversation.isPinned)
 }
 
 function startRename(conversation: ConversationSummary) {
-  closeMenu()
-  renamingId.value = conversation.id
-  renamingTitle.value = conversation.title
+  closePopover()
+  renamePopoverId.value = conversation.id
+  renameTitle.value = conversation.title
   nextTick(() => {
-    renameInput.value?.focus()
-    renameInput.value?.select()
+    const el = document.querySelector<HTMLInputElement>('.rename-popover-input')
+    el?.focus()
+    el?.select()
   })
 }
 
-function submitRename() {
-  const title = renamingTitle.value.trim()
+function confirmRename() {
+  const title = renameTitle.value.trim()
   if (!title) return
-  emit('rename', renamingId.value, title)
-  renamingId.value = ''
-  renamingTitle.value = ''
+  emit('rename', renamePopoverId.value, title)
+  renamePopoverId.value = ''
+  renameTitle.value = ''
 }
 
 function cancelRename() {
-  renamingId.value = ''
-  renamingTitle.value = ''
+  renamePopoverId.value = ''
+  renameTitle.value = ''
 }
 
 async function onDelete(conversation: ConversationSummary) {
-  closeMenu()
+  closePopover()
   await ElMessageBox.confirm('确定要删除这个会话吗？', '删除会话', {
     confirmButtonText: '删除',
     cancelButtonText: '取消',
@@ -77,49 +73,76 @@ async function onDelete(conversation: ConversationSummary) {
           :key="conversation.id"
           class="conversation-item"
           :class="{ 'conversation-item--active': conversation.id === activeConversationId }"
-          @click="renamingId !== conversation.id && $emit('select', conversation.id)"
+          @click="renamePopoverId !== conversation.id && $emit('select', conversation.id)"
         >
           <div class="conversation-item-left">
             <div class="conversation-item-title-row">
               <span v-if="conversation.isPinned" class="conversation-item-pin-tag">已置顶</span>
-              <template v-if="renamingId === conversation.id">
-                <input
-                  v-model="renamingTitle"
-                  class="conversation-item-rename-input"
-                  @keyup.enter="submitRename"
-                  @keyup.escape="cancelRename"
-                  @blur="submitRename"
-                  @click.stop
-                  ref="renameInput"
-                />
-              </template>
-              <span v-else class="conversation-item-title">{{ conversation.title }}</span>
+              <span class="conversation-item-title">{{ conversation.title }}</span>
             </div>
             <span class="conversation-item-preview">{{
               conversation.lastMessagePreview || '暂无消息'
             }}</span>
+            <ElPopover
+              placement="bottom"
+              :width="280"
+              :show-arrow="false"
+              :teleported="true"
+              :visible="renamePopoverId === conversation.id"
+              popper-style="padding: 0"
+              @update:visible="
+                (val: boolean) => {
+                  if (!val && renamePopoverId === conversation.id) cancelRename()
+                }
+              "
+            >
+              <template #reference>
+                <span class="rename-popover-reference" />
+              </template>
+              <div class="rename-popover-content">
+                <div class="rename-popover-header">重命名会话</div>
+                <input
+                  v-model="renameTitle"
+                  class="rename-popover-input"
+                  placeholder="请输入会话名称"
+                  @keyup.enter="confirmRename"
+                  @keyup.escape="cancelRename"
+                />
+                <div class="rename-popover-actions">
+                  <el-button size="small" @click="cancelRename">取消</el-button>
+                  <el-button size="small" type="primary" @click="confirmRename">确定</el-button>
+                </div>
+              </div>
+            </ElPopover>
           </div>
           <div class="conversation-item-right" @click.stop>
-            <el-button
-              :icon="MoreFilled"
-              text
-              size="small"
-              @click="toggleMenu(conversation.id)"
-            ></el-button>
-            <div
-              v-if="openMenuId === conversation.id"
-              class="conversation-item-menu"
+            <ElPopover
+              trigger="click"
+              placement="bottom-end"
+              :width="160"
+              :show-arrow="false"
+              :hide-after="0"
+              :visible="visiblePopoverId === conversation.id"
+              :teleported="true"
+              :popper-style="{ padding: '4px' }"
+              @update:visible="(val: boolean) => (visiblePopoverId = val ? conversation.id : '')"
             >
-              <button class="conversation-item-menu-item" @click="onTogglePin(conversation)">
-                {{ conversation.isPinned ? '取消置顶' : '置顶' }}
-              </button>
-              <button class="conversation-item-menu-item" @click="startRename(conversation)">
-                重命名
-              </button>
-              <button class="conversation-item-menu-item conversation-item-menu-item--danger" @click="onDelete(conversation)">
-                删除
-              </button>
-            </div>
+              <template #reference>
+                <el-button :icon="MoreFilled" text size="small"></el-button>
+              </template>
+              <div class="popover-menu">
+                <div class="popover-menu-item" @click="onTogglePin(conversation)">
+                  {{ conversation.isPinned ? '取消置顶' : '置顶' }}
+                </div>
+                <div class="popover-menu-item" @click="startRename(conversation)">重命名</div>
+                <div
+                  class="popover-menu-item popover-menu-item--danger"
+                  @click="onDelete(conversation)"
+                >
+                  删除
+                </div>
+              </div>
+            </ElPopover>
           </div>
         </div>
       </template>
@@ -182,9 +205,9 @@ async function onDelete(conversation: ConversationSummary) {
   }
 
   &-right {
-    display: none;
-    margin-left: 12px;
-    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
 
     .el-button {
@@ -193,13 +216,13 @@ async function onDelete(conversation: ConversationSummary) {
     }
   }
 
-  &:hover {
-    .conversation-item-right {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-  }
+  // &:hover {
+  //   .conversation-item-right {
+  //     display: flex;
+  //     align-items: center;
+  //     justify-content: center;
+  //   }
+  // }
 
   &--active {
     background: rgba(174, 213, 255, 0.517);
@@ -230,56 +253,71 @@ async function onDelete(conversation: ConversationSummary) {
     text-overflow: ellipsis;
   }
 
-  &-rename-input {
-    flex: 1;
-    min-width: 0;
-    padding: 4px 8px;
-    border: 1px solid rgba(18, 52, 88, 0.2);
-    border-radius: 8px;
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: 600;
-    outline: none;
-    background: rgba(255, 255, 255, 0.6);
+}
 
-    &:focus {
-      border-color: #123458;
-    }
+.rename-popover-reference {
+  pointer-events: none;
+}
+
+.rename-popover-content {
+  padding: 16px;
+}
+
+.rename-popover-header {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a2634;
+  margin-bottom: 12px;
+}
+
+.rename-popover-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(18, 52, 88, 0.2);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.8);
+  transition: border-color 0.2s;
+
+  &:focus {
+    border-color: #123458;
+  }
+}
+
+.rename-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.popover-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.popover-menu-item {
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #324155;
+  user-select: none;
+
+  &:hover {
+    background: rgba(18, 52, 88, 0.06);
   }
 
-  &-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    z-index: 10;
-    min-width: 120px;
-    padding: 4px;
-    border-radius: 12px;
-    background: #fff;
-    box-shadow: 0 4px 20px rgba(18, 52, 88, 0.2);
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  &-menu-item {
-    all: unset;
-    padding: 8px 14px;
-    border-radius: 8px;
-    font-size: 13px;
-    cursor: pointer;
-    color: #324155;
+  &--danger {
+    color: #e74c3c;
 
     &:hover {
-      background: rgba(18, 52, 88, 0.06);
-    }
-
-    &--danger {
-      color: #e74c3c;
-
-      &:hover {
-        background: rgba(231, 76, 60, 0.08);
-      }
+      background: rgba(231, 76, 60, 0.08);
     }
   }
 }
