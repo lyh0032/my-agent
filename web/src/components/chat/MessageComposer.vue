@@ -238,21 +238,17 @@ onBeforeUnmount(() => {
   min-height: 120px;
   overflow: hidden;
   padding: 16px;
-  border: 1px solid rgba(18, 52, 88, 0.12);
+  border: 1px solid var(--border-color);
   border-radius: 28px;
-  box-shadow:
-    0 18px 40px rgba(18, 52, 88, 0.08),
-    0 6px 14px rgba(18, 52, 88, 0.05);
+  box-shadow: var(--shadow-md), var(--shadow-sm);
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease,
     transform 0.2s ease;
 
   &:focus-within {
-    border-color: rgba(18, 52, 88, 0.22);
-    box-shadow:
-      0 22px 48px rgba(18, 52, 88, 0.12),
-      0 0 0 4px rgba(18, 52, 88, 0.06);
+    border-color: var(--border-medium);
+    box-shadow: var(--shadow-lg), 0 0 0 4px var(--bg-hover);
     transform: translateY(-1px);
   }
 
@@ -272,12 +268,12 @@ onBeforeUnmount(() => {
       background: transparent;
       box-shadow: none;
       border: none !important;
-      color: #142235;
+      color: var(--text-primary);
       line-height: 1.7;
       font-size: 15px;
 
       &::placeholder {
-        color: #8f99a8;
+        color: var(--text-tertiary);
       }
     }
   }
@@ -299,7 +295,7 @@ onBeforeUnmount(() => {
   }
 
   &-hint {
-    color: #7c8798;
+    color: var(--text-secondary);
     font-size: 12px;
     line-height: 1;
     user-select: none;
@@ -310,12 +306,12 @@ onBeforeUnmount(() => {
     box-shadow: 0 10px 20px rgba(18, 52, 88, 0.2);
 
     &:not(.is-disabled) {
-      background: linear-gradient(135deg, #123458 0%, #275d90 100%);
+      background: var(--gradient-primary);
     }
 
     &.is-disabled {
       box-shadow: none;
-      background: #d7dce4;
+      background: var(--bg-badge);
     }
 
     :deep(.el-icon) {
@@ -324,8 +320,8 @@ onBeforeUnmount(() => {
   }
 
   &-mic {
-    border: 1px solid rgba(18, 52, 88, 0.14);
-    color: #123458;
+    border: 1px solid var(--border-color);
+    color: var(--accent);
 
     &.el-button--warning {
       border: 0;

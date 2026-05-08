@@ -8,6 +8,7 @@ import MessageComposer from '../components/chat/MessageComposer.vue'
 import MessageList from '../components/chat/MessageList.vue'
 import { useAuthStore } from '../stores/auth'
 import { useChatStore } from '../stores/chat'
+import { useThemeStore } from '../stores/theme'
 import type { ModelInfo } from '../types/chat'
 import {
   fetchAvailableModels,
@@ -18,6 +19,7 @@ import { Plus } from '@element-plus/icons-vue'
 
 const authStore = useAuthStore()
 const chatStore = useChatStore()
+const themeStore = useThemeStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -327,7 +329,25 @@ async function handleLogout() {
             <h2>{{ chatStore.activeConversation?.title || '未选择会话' }}</h2>
           </div>
         </div>
-        <span class="chat-layout-user">{{ authStore.user?.username }}</span>
+
+        <div style="display: flex; align-items: center; gap: 12px">
+          <span class="chat-layout-user">{{ authStore.user?.username }}</span>
+          <button
+            class="chat-layout-theme-btn"
+            :title="
+              themeStore.mode === 'system'
+                ? '跟随系统'
+                : themeStore.mode === 'light'
+                  ? '浅色模式'
+                  : '深色模式'
+            "
+            @click="themeStore.cycle()"
+          >
+            <el-icon v-if="themeStore.mode === 'light'"><Sunny /></el-icon>
+            <el-icon v-else-if="themeStore.mode === 'dark'"><Moon /></el-icon>
+            <el-icon v-else><Monitor /></el-icon>
+          </button>
+        </div>
       </header>
 
       <div class="chat-layout-content" ref="contentRef">
@@ -370,11 +390,11 @@ async function handleLogout() {
   overflow: hidden;
   display: flex;
   position: relative;
-  background: rgba(255, 255, 255, 0.16);
+  background: transparent;
 
   &-sidebar {
-    background: rgba(255, 255, 255, 0.7);
-    border-right: 1px solid rgba(18, 52, 88, 0.08);
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border-light);
     backdrop-filter: blur(18px);
     width: 300px;
     height: 100%;
@@ -403,7 +423,7 @@ async function handleLogout() {
     justify-content: space-between;
     gap: 12px;
     padding: 0 16px 16px;
-    border-bottom: 1px solid rgba(18, 52, 88, 0.2);
+    border-bottom: 1px solid var(--border-medium);
   }
 
   &-conversation-title {
@@ -414,7 +434,7 @@ async function handleLogout() {
   &-eyebrow {
     display: inline-block;
     margin-bottom: 8px;
-    color: #8c5c2a;
+    color: var(--accent-warm);
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.12em;
@@ -425,7 +445,7 @@ async function handleLogout() {
     padding: 16px;
     display: grid;
     gap: 10px;
-    box-shadow: 0px -3px 16px 0px rgb(210 210 210 / 50%);
+    box-shadow: var(--shadow-sidebar);
 
     .el-button {
       width: 100%;
@@ -435,7 +455,7 @@ async function handleLogout() {
 
   &-model-desc {
     margin-left: 8px;
-    color: #999;
+    color: var(--text-tertiary);
     font-size: 12px;
   }
 
@@ -454,7 +474,7 @@ async function handleLogout() {
     justify-content: space-between;
     gap: 16px;
     padding: 16px;
-    border-bottom: 1px solid rgba(18, 52, 88, 0.2);
+    border-bottom: 1px solid var(--border-medium);
 
     h2 {
       margin: 0;
@@ -478,9 +498,29 @@ async function handleLogout() {
   &-user {
     padding: 10px 14px;
     border-radius: 999px;
-    background: rgba(18, 52, 88, 0.08);
+    background: var(--bg-badge);
     font-weight: 600;
     white-space: nowrap;
+  }
+
+  &-theme-btn {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    font-size: 16px;
+    transition: color 0.2s;
+
+    &:hover {
+      color: var(--accent);
+    }
   }
 
   &-content {
@@ -524,7 +564,7 @@ async function handleLogout() {
     inset: 0;
     border: 0;
     padding: 0;
-    background: rgba(8, 15, 24, 0.38);
+    background: var(--bg-backdrop);
     z-index: 2;
   }
 
@@ -536,10 +576,10 @@ async function handleLogout() {
     justify-content: center;
     align-items: center;
     gap: 4px;
-    border: 1px solid rgba(18, 52, 88, 0.12);
+    border: 1px solid var(--border-color);
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.72);
-    color: #123458;
+    background: var(--bg-element);
+    color: var(--accent);
     cursor: pointer;
     flex-shrink: 0;
 
@@ -566,8 +606,8 @@ async function handleLogout() {
       inset: 0 auto 0 0;
       width: min(84vw, 320px);
       max-width: 320px;
-      border-right: 1px solid rgba(18, 52, 88, 0.08);
-      box-shadow: 0 18px 50px rgba(18, 52, 88, 0.24);
+      border-right: 1px solid var(--border-light);
+      box-shadow: var(--shadow-mobile-sidebar);
       transform: translateX(-100%);
       transition: transform 0.24s ease;
 

@@ -2,6 +2,7 @@
 import { reactive } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
+import AnimatedBackground from '../components/AnimatedBackground.vue'
 import { useAuthStore } from '../stores/auth'
 
 const authStore = useAuthStore()
@@ -25,6 +26,7 @@ async function handleSubmit() {
 </script>
 
 <template>
+  <AnimatedBackground />
   <div class="auth-page">
     <el-card class="auth-card" shadow="never">
       <div class="auth-card-intro">
@@ -54,6 +56,8 @@ async function handleSubmit() {
 
 <style scoped lang="less">
 .auth-page {
+  position: relative;
+  z-index: 1;
   min-height: 100vh;
   display: grid;
   place-items: center;
@@ -63,24 +67,44 @@ async function handleSubmit() {
 .auth-card {
   width: min(100%, 520px);
   border-radius: 28px;
+  background: rgba(18, 20, 38, 0.65) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #e0e4f0;
+
+  :deep(.el-form-item__label) {
+    color: #b0b8d0 !important;
+  }
+
+  :deep(.el-input__wrapper) {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: none;
+  }
+
+  :deep(.el-input__inner) {
+    color: #e0e4f0;
+  }
 
   &-intro {
     margin-bottom: 20px;
 
     h1 {
       margin: 0 0 8px;
+      color: #e8ecf8;
     }
 
     p {
       margin: 0;
-      color: #5f6774;
+      color: #8a94b0;
     }
   }
 
   &-eyebrow {
     display: inline-block;
     margin-bottom: 12px;
-    color: #8c5c2a;
+    color: #8c9eff;
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.12em;
@@ -93,7 +117,16 @@ async function handleSubmit() {
 
   &-footer {
     margin-top: 20px;
-    color: #5f6774;
+    color: #8a94b0;
+
+    a {
+      color: #7a9eff;
+      font-weight: 600;
+
+      &:hover {
+        color: #9ab4ff;
+      }
+    }
   }
 }
 

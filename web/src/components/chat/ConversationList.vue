@@ -171,7 +171,7 @@ async function onDelete(conversation: ConversationSummary) {
   &-empty {
     padding: 12px;
     text-align: center;
-    color: #7b8594;
+    color: var(--text-secondary);
     font-size: 13px;
   }
 }
@@ -187,7 +187,7 @@ async function onDelete(conversation: ConversationSummary) {
   cursor: pointer;
   display: flex;
   overflow: visible;
-  background: rgba(18, 52, 88, 0.08);
+  background: var(--bg-badge);
 
   &-left {
     display: flex;
@@ -225,7 +225,7 @@ async function onDelete(conversation: ConversationSummary) {
   // }
 
   &--active {
-    background: rgba(174, 213, 255, 0.517);
+    background: var(--bg-active);
   }
 
   &-title {
@@ -240,13 +240,13 @@ async function onDelete(conversation: ConversationSummary) {
     padding: 2px 8px;
     border-radius: 999px;
     background: rgba(140, 92, 42, 0.12);
-    color: #8c5c2a;
+    color: var(--accent-warm);
     font-size: 12px;
     line-height: 1.4;
   }
 
   &-preview {
-    color: #5f6774;
+    color: var(--text-secondary);
     font-size: 12px;
     overflow: hidden;
     white-space: nowrap;
@@ -266,7 +266,7 @@ async function onDelete(conversation: ConversationSummary) {
 .rename-popover-header {
   font-size: 15px;
   font-weight: 600;
-  color: #1a2634;
+  color: var(--text-primary);
   margin-bottom: 12px;
 }
 
@@ -275,16 +275,16 @@ async function onDelete(conversation: ConversationSummary) {
   box-sizing: border-box;
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid rgba(18, 52, 88, 0.2);
+  border: 1px solid var(--border-medium);
   border-radius: 8px;
   font-family: inherit;
   font-size: 14px;
   outline: none;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--bg-input);
   transition: border-color 0.2s;
 
   &:focus {
-    border-color: #123458;
+    border-color: var(--accent);
   }
 }
 
@@ -306,18 +306,18 @@ async function onDelete(conversation: ConversationSummary) {
   border-radius: 8px;
   font-size: 13px;
   cursor: pointer;
-  color: #324155;
+  color: var(--text-primary);
   user-select: none;
 
   &:hover {
-    background: rgba(18, 52, 88, 0.06);
+    background: var(--bg-hover);
   }
 
   &--danger {
-    color: #e74c3c;
+    color: var(--danger);
 
     &:hover {
-      background: rgba(231, 76, 60, 0.08);
+      background: var(--danger-bg);
     }
   }
 }

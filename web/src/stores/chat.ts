@@ -17,16 +17,6 @@ import {
 } from '../api/chat'
 import type { ConversationSummary, Message, StreamAssistantStatus } from '../types/chat'
 
-function sortConversations(conversations: ConversationSummary[]) {
-  return [...conversations].sort((left, right) => {
-    if (left.isPinned !== right.isPinned) {
-      return left.isPinned ? -1 : 1
-    }
-
-    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
-  })
-}
-
 export const useChatStore = defineStore('chat', () => {
   const conversations = ref<ConversationSummary[]>([])
   const activeConversationId = ref('')
@@ -249,7 +239,7 @@ export const useChatStore = defineStore('chat', () => {
   async function loadConversations() {
     isLoadingConversations.value = true
     try {
-      conversations.value = sortConversations(await fetchConversations())
+      conversations.value = await fetchConversations()
       if (!activeConversationId.value && conversations.value[0]) {
         activeConversationId.value = conversations.value[0].id
       }
@@ -260,7 +250,7 @@ export const useChatStore = defineStore('chat', () => {
 
   async function createConversationAction(initialMessage?: string) {
     const conversation = await createConversation({ initialMessage })
-    conversations.value = sortConversations([conversation, ...conversations.value])
+    conversations.value = [conversation, ...conversations.value]
     activeConversationId.value = conversation.id
     messages.value = []
     return conversation
@@ -350,29 +340,16 @@ export const useChatStore = defineStore('chat', () => {
 
   async function renameConversationAction(conversationId: string, title: string) {
     const updatedConversation = await renameConversation(conversationId, title)
-    conversations.value = sortConversations(
-      conversations.value.map((conversation) =>
-        conversation.id === conversationId
-          ? { ...conversation, ...updatedConversation }
-          : conversation
-      )
+    conversations.value = conversations.value.map((conversation) =>
+      conversation.id === conversationId
+        ? { ...conversation, ...updatedConversation }
+        : conversation
     )
   }
 
   async function toggleConversationPinAction(conversationId: string, isPinned: boolean) {
-    const updatedConversation = await toggleConversationPin(conversationId, isPinned)
-    conversations.value = sortConversations(
-      conversations.value.map((conversation) =>
-        conversation.id === conversationId
-          ? {
-              ...conversation,
-              ...updatedConversation,
-              lastMessagePreview: conversation.lastMessagePreview,
-              messageCount: conversation.messageCount
-            }
-          : conversation
-      )
-    )
+    await toggleConversationPin(conversationId, isPinned)
+    await loadConversations()
   }
 
   async function deleteConversationAction(conversationId: string) {

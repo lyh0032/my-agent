@@ -336,7 +336,7 @@ function showMessageStatusPlaceholder(message: Message) {
   display: flex;
   flex-direction: column;
   text-align: center;
-  color: #5f6774;
+  color: var(--text-secondary);
   position: absolute;
   width: 100%;
   top: 50%;
@@ -359,13 +359,13 @@ function showMessageStatusPlaceholder(message: Message) {
   max-width: 100%;
   padding: 16px 18px;
   border-radius: 20px;
-  background: #d3e5ff;
-  color: #142235;
+  background: var(--bg-assistant-msg);
+  color: var(--text-primary);
 
   &--user {
     margin-left: auto;
-    background: #123458;
-    color: #fff;
+    background: var(--bg-user-msg);
+    color: var(--text-inverse);
   }
 
   &--assistant {
@@ -378,7 +378,7 @@ function showMessageStatusPlaceholder(message: Message) {
 
   &--system {
     margin: 0 auto;
-    background: #fff2cf;
+    background: var(--bg-system-msg);
   }
 
   &-role {
@@ -392,13 +392,13 @@ function showMessageStatusPlaceholder(message: Message) {
   }
 
   &-time {
-    color: #888888;
+    color: var(--text-secondary);
     font-size: 10px;
   }
 
   &-status {
     margin-left: 8px;
-    color: #8c5c2a;
+    color: var(--accent-warm);
     font-size: 10px;
   }
 
@@ -431,8 +431,8 @@ function showMessageStatusPlaceholder(message: Message) {
     :deep(blockquote) {
       margin: 0 0 0.85em;
       padding: 0.75em 1em;
-      border-left: 4px solid rgba(18, 52, 88, 0.18);
-      background: rgba(18, 52, 88, 0.05);
+      border-left: 4px solid var(--border-color);
+      background: var(--bg-blockquote);
       border-radius: 0 12px 12px 0;
     }
 
@@ -448,7 +448,7 @@ function showMessageStatusPlaceholder(message: Message) {
     :deep(code) {
       padding: 0.15em 0.35em;
       border-radius: 6px;
-      background: rgba(18, 52, 88, 0.08);
+      background: var(--bg-code-inline);
       font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
       font-size: 0.95em;
     }
@@ -472,20 +472,20 @@ function showMessageStatusPlaceholder(message: Message) {
     :deep(th),
     :deep(td) {
       padding: 10px 12px;
-      border: 1px solid rgba(18, 52, 88, 0.14);
+      border: 1px solid var(--border-color);
       text-align: left;
       vertical-align: top;
     }
 
     :deep(th) {
-      background: rgba(18, 52, 88, 0.06);
+      background: var(--bg-table-hdr);
       font-weight: 700;
     }
 
     :deep(hr) {
       margin: 1em 0;
       border: 0;
-      border-top: 1px solid rgba(18, 52, 88, 0.16);
+      border-top: 1px solid var(--border-color);
     }
 
     :deep(a) {
@@ -506,8 +506,8 @@ function showMessageStatusPlaceholder(message: Message) {
     margin: 0;
     padding: 10px;
     border-radius: 16px;
-    background: rgba(255, 255, 255, 0.56);
-    border: 1px solid rgba(18, 52, 88, 0.12);
+    background: var(--bg-gallery);
+    border: 1px solid var(--border-color);
   }
 
   &-gallery-img {
@@ -516,13 +516,13 @@ function showMessageStatusPlaceholder(message: Message) {
     object-fit: cover;
     display: block;
     border-radius: 12px;
-    background: rgba(18, 52, 88, 0.08);
+    background: var(--bg-badge);
   }
 
   &-gallery-caption {
     margin-top: 8px;
     font-size: 13px;
-    color: #324155;
+    color: var(--text-primary);
   }
 
   &-gallery-actions {
@@ -535,8 +535,8 @@ function showMessageStatusPlaceholder(message: Message) {
       height: 36px;
       border: 0;
       border-radius: 10px;
-      background: #123458;
-      color: #fff;
+      background: var(--accent);
+      color: var(--text-inverse);
       cursor: pointer;
     }
   }
@@ -552,7 +552,7 @@ function showMessageStatusPlaceholder(message: Message) {
   &-inline-status-text {
     font-size: 13px;
     font-weight: 600;
-    color: #324155;
+    color: var(--text-primary);
   }
 
   &-status-placeholder {
@@ -560,7 +560,7 @@ function showMessageStatusPlaceholder(message: Message) {
     align-items: center;
     gap: 10px;
     min-height: 28px;
-    color: #324155;
+    color: var(--text-primary);
   }
 
   &-status-placeholder-text {
@@ -596,18 +596,18 @@ function showMessageStatusPlaceholder(message: Message) {
     letter-spacing: 0.04em;
 
     &--tool {
-      background: rgba(18, 52, 88, 0.12);
-      color: #123458;
+      background: var(--bg-chip-tool);
+      color: var(--color-chip-tool);
     }
 
     &--search {
-      background: rgba(20, 115, 92, 0.14);
-      color: #0e6b58;
+      background: var(--bg-chip-search);
+      color: var(--color-chip-search);
     }
 
     &--image {
-      background: rgba(140, 92, 42, 0.16);
-      color: #8c5c2a;
+      background: var(--bg-chip-image);
+      color: var(--color-chip-image);
     }
   }
 
@@ -658,36 +658,36 @@ function showMessageStatusPlaceholder(message: Message) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid rgba(18, 52, 88, 0.12);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.85);
-    color: #5f6774;
+    background: var(--bg-element);
+    color: var(--text-secondary);
     cursor: pointer;
     font-size: 14px;
     padding: 0;
 
     &:hover {
-      background: #fff;
-      color: #123458;
+      background: var(--bg-surface);
+      color: var(--accent);
     }
   }
 
   &-edit-textarea {
     width: 100%;
     padding: 10px;
-    border: 1px solid rgba(18, 52, 88, 0.2);
+    border: 1px solid var(--border-medium);
     border-radius: 10px;
     font-family: inherit;
     font-size: 14px;
     line-height: 1.6;
     resize: vertical;
-    background: rgba(255, 255, 255, 0.6);
+    background: var(--bg-input);
     color: inherit;
     outline: none;
     box-sizing: border-box;
 
     &:focus {
-      border-color: #123458;
+      border-color: var(--accent);
     }
   }
 

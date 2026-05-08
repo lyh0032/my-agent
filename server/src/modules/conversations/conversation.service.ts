@@ -19,7 +19,7 @@ const conversationSummarySelect = {
 
 const conversationListOrderBy = [
   { isPinned: 'desc' },
-  { updatedAt: 'desc' }
+  { createdAt: 'desc' }
 ] satisfies Prisma.ConversationOrderByWithRelationInput[]
 
 function buildConversationTitle(title?: string): string {

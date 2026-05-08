@@ -210,11 +210,11 @@ function formatDate(value: string) {
   overflow: hidden;
   display: flex;
   position: relative;
-  background: rgba(255, 255, 255, 0.16);
+  background: transparent;
 
   &-sidebar {
-    background: rgba(255, 255, 255, 0.7);
-    border-right: 1px solid rgba(18, 52, 88, 0.08);
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border-light);
     backdrop-filter: blur(18px);
     width: 300px;
     height: 100%;
@@ -245,7 +245,7 @@ function formatDate(value: string) {
   &-eyebrow {
     display: inline-block;
     margin-bottom: 8px;
-    color: #8c5c2a;
+    color: var(--accent-warm);
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.12em;
@@ -256,7 +256,7 @@ function formatDate(value: string) {
     margin: 0 16px;
     padding: 18px;
     border-radius: 24px;
-    background: linear-gradient(135deg, rgba(18, 52, 88, 0.08), rgba(140, 92, 42, 0.1));
+    background: var(--bg-warm);
     display: grid;
     gap: 10px;
   }
@@ -264,12 +264,12 @@ function formatDate(value: string) {
   &-summary-title {
     font-size: 18px;
     font-weight: 700;
-    color: #123458;
+    color: var(--accent);
   }
 
   &-summary-text {
     margin: 0;
-    color: rgba(18, 52, 88, 0.72);
+    color: var(--text-muted);
     line-height: 1.7;
   }
 
@@ -285,20 +285,20 @@ function formatDate(value: string) {
   &-stat-card {
     padding: 16px 18px;
     border-radius: 20px;
-    background: rgba(255, 255, 255, 0.66);
-    border: 1px solid rgba(18, 52, 88, 0.08);
+    background: var(--bg-element);
+    border: 1px solid var(--border-light);
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
 
     span {
-      color: rgba(18, 52, 88, 0.72);
+      color: var(--text-muted);
     }
 
     strong {
       font-size: 26px;
-      color: #123458;
+      color: var(--accent);
     }
   }
 
@@ -306,7 +306,7 @@ function formatDate(value: string) {
     padding: 16px;
     display: grid;
     gap: 10px;
-    box-shadow: 0px -3px 16px 0px rgb(210 210 210 / 50%);
+    box-shadow: var(--shadow-sidebar);
 
     .el-button {
       width: 100%;
@@ -323,7 +323,7 @@ function formatDate(value: string) {
   }
 
   &-header {
-    border-bottom: 1px solid rgba(18, 52, 88, 0.2);
+    border-bottom: 1px solid var(--border-medium);
   }
 
   &-header-main {
@@ -336,7 +336,7 @@ function formatDate(value: string) {
   &-count {
     padding: 10px 14px;
     border-radius: 999px;
-    background: rgba(18, 52, 88, 0.08);
+    background: var(--bg-badge);
     font-weight: 600;
     white-space: nowrap;
   }
@@ -360,7 +360,7 @@ function formatDate(value: string) {
     place-items: center;
     text-align: center;
     padding: 32px;
-    color: rgba(18, 52, 88, 0.72);
+    color: var(--text-muted);
 
     &--empty {
       gap: 12px;
@@ -379,9 +379,9 @@ function formatDate(value: string) {
   gap: 18px;
   padding: 20px;
   border-radius: 28px;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(18, 52, 88, 0.08);
-  box-shadow: 0 18px 40px rgba(18, 52, 88, 0.08);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-md);
 
   &-header,
   &-footer {
@@ -399,7 +399,7 @@ function formatDate(value: string) {
     h3 {
       font-size: 20px;
       line-height: 1.3;
-      color: #123458;
+      color: var(--text-primary);
       word-break: break-word;
     }
   }
@@ -409,23 +409,23 @@ function formatDate(value: string) {
     width: fit-content;
     padding: 6px 10px;
     border-radius: 999px;
-    background: rgba(140, 92, 42, 0.12);
-    color: #8c5c2a;
+    background: var(--bg-chip-image);
+    color: var(--color-chip-image);
     font-size: 12px;
     font-weight: 700;
   }
 
   &-content {
     margin: 0;
-    color: rgba(18, 52, 88, 0.86);
+    color: var(--text-primary);
     line-height: 1.8;
     word-break: break-word;
   }
 
   &-footer {
     padding-top: 14px;
-    border-top: 1px solid rgba(18, 52, 88, 0.08);
-    color: rgba(18, 52, 88, 0.64);
+    border-top: 1px solid var(--border-light);
+    color: var(--text-muted-light);
     font-size: 13px;
   }
 }
@@ -435,7 +435,7 @@ function formatDate(value: string) {
   inset: 0;
   border: 0;
   padding: 0;
-  background: rgba(8, 15, 24, 0.38);
+  background: var(--bg-backdrop);
   z-index: 2;
 }
 
@@ -447,10 +447,10 @@ function formatDate(value: string) {
   justify-content: center;
   align-items: center;
   gap: 4px;
-  border: 1px solid rgba(18, 52, 88, 0.12);
+  border: 1px solid var(--border-color);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #123458;
+  background: var(--bg-element);
+  color: var(--accent);
   cursor: pointer;
   flex-shrink: 0;
 
@@ -484,8 +484,8 @@ function formatDate(value: string) {
       inset: 0 auto 0 0;
       width: min(84vw, 320px);
       max-width: 320px;
-      border-right: 1px solid rgba(18, 52, 88, 0.08);
-      box-shadow: 0 18px 50px rgba(18, 52, 88, 0.24);
+      border-right: 1px solid var(--border-light);
+      box-shadow: var(--shadow-mobile-sidebar);
       transform: translateX(-100%);
       transition: transform 0.24s ease;
 
