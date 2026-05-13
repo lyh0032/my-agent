@@ -117,7 +117,7 @@ export const useChatStore = defineStore('chat', () => {
         clearActiveStream(controller)
       }
 
-      void loadConversations()
+      void loadConversations(true)
     }
 
     return {
@@ -127,7 +127,7 @@ export const useChatStore = defineStore('chat', () => {
         }
 
         upsertMessage(userMessage)
-        void loadConversations()
+        void loadConversations(true)
       },
       onAssistantMessage(assistantMessage: Message) {
         if (!isCurrentController() || activeConversationId.value !== conversationId) {
@@ -241,8 +241,10 @@ export const useChatStore = defineStore('chat', () => {
       })
   }
 
-  async function loadConversations() {
-    isLoadingConversations.value = true
+  async function loadConversations(silent = false) {
+    if (!silent) {
+      isLoadingConversations.value = true
+    }
     try {
       conversations.value = await fetchConversations()
       if (!activeConversationId.value && conversations.value[0]) {
@@ -344,7 +346,7 @@ export const useChatStore = defineStore('chat', () => {
 
     const result = await cancelMessageStream(conversationId, messageId)
     upsertMessage(result.assistantMessage)
-    await loadConversations()
+    await loadConversations(true)
   }
 
   async function renameConversationAction(conversationId: string, title: string) {
@@ -358,7 +360,7 @@ export const useChatStore = defineStore('chat', () => {
 
   async function toggleConversationPinAction(conversationId: string, isPinned: boolean) {
     await toggleConversationPin(conversationId, isPinned)
-    await loadConversations()
+    await loadConversations(true)
   }
 
   async function deleteConversationAction(conversationId: string) {

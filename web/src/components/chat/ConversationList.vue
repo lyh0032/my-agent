@@ -7,6 +7,7 @@ import { MoreFilled } from '@element-plus/icons-vue'
 const props = defineProps<{
   conversations: ConversationSummary[]
   activeConversationId: string
+  loading?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -67,7 +68,17 @@ async function onDelete(conversation: ConversationSummary) {
 <template>
   <div class="conversation-list">
     <div class="conversation-list-scroll">
-      <template v-if="conversations.length > 0">
+      <template v-if="loading">
+        <el-skeleton animated :count="4">
+          <template #template>
+            <div style="padding: 12px">
+              <el-skeleton-item variant="text" style="width: 60%; height: 16px; margin-bottom: 8px" />
+              <el-skeleton-item variant="text" style="width: 80%; height: 14px" />
+            </div>
+          </template>
+        </el-skeleton>
+      </template>
+      <template v-else-if="conversations.length > 0">
         <div
           v-for="conversation in conversations"
           :key="conversation.id"

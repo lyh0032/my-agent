@@ -165,7 +165,7 @@ async function handleSelectConversation(conversationId: string) {
 
 async function handleDeleteConversation(conversationId: string) {
   await chatStore.deleteConversation(conversationId)
-  await chatStore.loadConversations()
+  await chatStore.loadConversations(true)
 
   if (chatStore.conversations.length > 0) {
     await router.replace({
@@ -284,6 +284,7 @@ async function handleLogout() {
       <ConversationList
         :conversations="filteredConversations"
         :active-conversation-id="chatStore.activeConversationId"
+        :loading="chatStore.isLoadingConversations"
         @select="handleSelectConversation"
         @toggle-pin="handleTogglePinConversation"
         @rename="handleRenameConversation"
@@ -358,6 +359,7 @@ async function handleLogout() {
           <section class="chat-layout-messages" :key="route.query.conversationId as string">
             <MessageList
               :messages="chatStore.messages"
+              :loading="chatStore.isLoadingMessages"
               :streaming="chatStore.isSending"
               :thinking-text="chatStore.streamingStatusText"
               :streaming-status="chatStore.streamingStatus"

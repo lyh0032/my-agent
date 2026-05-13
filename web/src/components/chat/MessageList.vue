@@ -11,6 +11,7 @@ import { EditPen, Delete } from '@element-plus/icons-vue'
 
 const props = defineProps<{
   messages: Message[]
+  loading?: boolean
   streaming?: boolean
   thinkingText?: string
   streamingStatus?: StreamAssistantStatus | null
@@ -202,7 +203,21 @@ function showMessageStatusPlaceholder(message: Message) {
 </script>
 
 <template>
-  <div v-if="messages.length === 0" class="message-empty">
+  <div v-if="loading" class="message-list">
+    <el-skeleton animated :count="3">
+      <template #template>
+        <div style="display: flex; gap: 12px; padding: 16px 18px">
+          <el-skeleton-item variant="circle" style="width: 32px; height: 32px" />
+          <div style="flex: 1">
+            <el-skeleton-item variant="text" style="width: 30%; margin-bottom: 10px" />
+            <el-skeleton-item variant="text" style="width: 60%; margin-bottom: 10px" />
+            <el-skeleton-item variant="text" style="width: 85%" />
+          </div>
+        </div>
+      </template>
+    </el-skeleton>
+  </div>
+  <div v-else-if="messages.length === 0" class="message-empty">
     <h3>开始一段新对话</h3>
     <p>输入你的问题，系统会保存会话和消息历史。</p>
   </div>

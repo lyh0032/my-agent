@@ -3,7 +3,7 @@
 ## 仓库结构
 
 - `server/` 和 `web/` 是两个独立应用，无 workspace runner
-- `server/`: Express + Prisma + SQLite
+- `server/`: Express + Prisma + PostgreSQL (Neon 云数据库)
 - `web/`: Vue 3 + Vite + Pinia + Element Plus
 
 ## 常用命令
@@ -16,7 +16,7 @@
 ## 服务端注意事项
 
 - API 挂在 `/api`，健康检查 `/health`，服务绑定 `0.0.0.0`
-- SQLite 数据库 `server/prisma/dev.db`，schema 在 `server/prisma/schema.prisma`
+- 数据库采用 Neon PostgreSQL 云数据库，连接串在 `.env` 的 `DATABASE_URL`；schema 在 `server/prisma/schema.prisma`
 - CORS 配置在 `server/src/app.ts`，新 host/port 需添加
 - `DASHSCOPE_API_KEY` 启用内置 web search MCP；`MCP_SERVERS` 可选
 

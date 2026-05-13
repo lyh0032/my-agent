@@ -168,11 +168,9 @@ function formatDate(value: string) {
         <span class="memory-layout-count">{{ memoryStore.memories.length }} 条记忆</span>
       </header>
 
-      <section class="memory-layout-content">
-        <div v-if="memoryStore.isLoading" class="memory-layout-state">正在加载记忆...</div>
-
+      <section class="memory-layout-content" v-loading="memoryStore.isLoading">
         <div
-          v-else-if="memoryStore.memories.length === 0"
+          v-if="!memoryStore.isLoading && memoryStore.memories.length === 0"
           class="memory-layout-state memory-layout-state--empty"
         >
           <h3>还没有长期记忆</h3>
