@@ -21,8 +21,10 @@ function apply(resolved: 'light' | 'dark') {
   const html = document.documentElement
   if (resolved === 'dark') {
     html.setAttribute('data-theme', 'dark')
+    html.classList.add('dark')
   } else {
     html.removeAttribute('data-theme')
+    html.classList.remove('dark')
   }
 }
 
