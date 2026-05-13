@@ -1,4 +1,5 @@
 import MarkdownIt from 'markdown-it'
+import hljs from 'highlight.js'
 import DOMPurify from 'dompurify'
 import type { MessageFile } from '../types/chat'
 
@@ -13,7 +14,15 @@ const markdownIt = new MarkdownIt({
   html: false,
   linkify: true,
   breaks: true,
-  typographer: true
+  typographer: true,
+  highlight: function (str: string, lang: string): string {
+    const langValid = lang && hljs.getLanguage(lang)
+    const langLabel = langValid ? `<span class="code-lang-label">${lang}</span>` : ''
+    const highlighted = langValid
+      ? hljs.highlight(str, { language: lang, ignoreIllegals: true }).value
+      : markdownIt.utils.escapeHtml(str)
+    return `<pre class="code-block"><div class="code-block-header">${langLabel}<button class="code-block-copy" type="button">复制</button></div><code${lang ? ` class="hljs language-${lang}"` : ' class="hljs"'}>${highlighted}</code></pre>`
+  }
 })
 
 const defaultLinkOpenRenderer =
@@ -70,6 +79,60 @@ export function extractMarkdownImages(content: string): MarkdownImageAsset[] {
   }
 
   return images
+}
+
+export function markdownToPlainText(md: string): string {
+  const tokens = markdownIt.parse(md ?? '', {})
+  const parts: string[] = []
+
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]
+
+    if (t.type === 'inline') {
+      parts.push(extractInlineText(t))
+    } else if (t.type === 'fence' || t.type === 'code_block') {
+      parts.push(t.content)
+      parts.push('\n')
+    } else if (t.nesting === -1) {
+      if (t.type === 'tr_close') {
+        parts.push('\n')
+      } else if (t.type === 'th_close' || t.type === 'td_close') {
+        parts.push('  ')
+      } else if (
+        [
+          'paragraph_close',
+          'heading_close',
+          'blockquote_close',
+          'list_item_close',
+          'bullet_list_close',
+          'ordered_list_close'
+        ].includes(t.type)
+      ) {
+        parts.push('\n\n')
+      }
+    }
+  }
+
+  return parts.join('').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+function extractInlineText(token: any): string {
+  if (!token.children || token.children.length === 0) {
+    return token.content ?? ''
+  }
+
+  const parts: string[] = []
+  for (const child of token.children) {
+    if (child.type === 'text' || child.type === 'code_inline') {
+      parts.push(child.content ?? '')
+    } else if (child.type === 'image') {
+      parts.push(child.alt ?? '')
+    } else if (child.type === 'softbreak' || child.type === 'hardbreak') {
+      parts.push('\n')
+    }
+  }
+
+  return parts.join('')
 }
 
 export function renderMarkdownWithoutFileLinks(content: string, fileList: MessageFile[] = []) {

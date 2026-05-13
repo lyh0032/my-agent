@@ -3,11 +3,12 @@ import { computed, ref } from 'vue'
 import type { Message, StreamAssistantStatus } from '../../types/chat'
 import {
   extractMarkdownImages,
+  markdownToPlainText,
   renderMarkdownWithoutFileLinks,
   type MarkdownImageAsset
 } from '../../utils/markdown'
 import { dayjs, ElMessage, ElMessageBox } from 'element-plus'
-import { EditPen, Delete } from '@element-plus/icons-vue'
+import { CopyDocument, EditPen, Delete } from '@element-plus/icons-vue'
 
 const props = defineProps<{
   messages: Message[]
@@ -63,6 +64,35 @@ function canEdit(message: Message) {
 
 function canDelete(message: Message) {
   return message.status !== 'generating'
+}
+
+function canCopy(message: Message) {
+  return Boolean(message.content)
+}
+
+async function handleCopy(message: Message) {
+  try {
+    const text = markdownToPlainText(message.content)
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制到剪贴板')
+  } catch {
+    ElMessage.error('复制失败')
+  }
+}
+
+function onContentClick(e: MouseEvent) {
+  const btn = (e.target as HTMLElement).closest('.code-block-copy') as HTMLElement | null
+  if (!btn) return
+  e.stopPropagation()
+  const pre = btn.closest('.code-block') as HTMLElement | null
+  const code = pre?.querySelector('code')
+  if (!code) return
+  const text = code.textContent || ''
+  navigator.clipboard.writeText(text)
+  const orig = btn.textContent
+  btn.textContent = '已复制'
+  setTimeout(() => { btn.textContent = orig }, 1500)
+  ElMessage.success('代码已复制')
 }
 
 const toolStatusMetaMap: Record<string, { label: string; tone: 'tool' | 'search' | 'image' }> = {
@@ -222,12 +252,13 @@ function showMessageStatusPlaceholder(message: Message) {
     <p>输入你的问题，系统会保存会话和消息历史。</p>
   </div>
   <div v-else class="message-list">
-      <article
-        v-for="message in messages"
-        :key="message.id"
-        class="message-bubble"
-        :class="`message-bubble--${message.role}`"
-      >
+    <article
+      v-for="message in messages"
+      :key="message.id"
+      class="message-wrapper"
+      :class="`message-wrapper--${message.role}`"
+    >
+      <div class="message-bubble" :class="`message-bubble--${message.role}`" @click="onContentClick">
         <span class="message-bubble-role">
           {{ roleLabelMap[message.role] }}
           <span class="message-bubble-time">{{
@@ -240,24 +271,6 @@ function showMessageStatusPlaceholder(message: Message) {
             {{ messageStatusLabelMap[message.status] }}
           </span>
         </span>
-        <div v-if="editingMessageId !== message.id" class="message-bubble-actions">
-          <button
-            v-if="canEdit(message)"
-            class="message-bubble-action-btn"
-            title="编辑"
-            @click="startEdit(message)"
-          >
-            <el-icon><EditPen /></el-icon>
-          </button>
-          <button
-            v-if="canDelete(message)"
-            class="message-bubble-action-btn"
-            title="删除"
-            @click="handleDelete(message)"
-          >
-            <el-icon><Delete /></el-icon>
-          </button>
-        </div>
         <div v-if="showInlineStatus(message)" class="message-bubble-inline-status">
           <span
             v-if="activeToolMeta"
@@ -326,21 +339,46 @@ function showMessageStatusPlaceholder(message: Message) {
           </div>
           <span v-if="showStreamingCursor(message)" class="message-bubble-cursor"></span>
         </template>
-      </article>
-    <article
-      v-if="showThinkingBubble"
-      class="message-bubble message-bubble--assistant message-bubble--thinking"
-      aria-live="polite"
-      aria-busy="true"
-    >
-      <span class="message-bubble-role">{{ roleLabelMap.assistant }}</span>
-      <div class="message-bubble-thinking">
-        <span class="message-bubble-thinking-text">{{ props.thinkingText || '正在整理回答' }}</span>
-        <span class="message-bubble-thinking-dots" aria-hidden="true">
-          <i></i>
-          <i></i>
-          <i></i>
-        </span>
+      </div>
+      <div v-if="editingMessageId !== message.id" class="message-actions">
+        <button class="message-action-btn" title="复制" @click="handleCopy(message)">
+          <el-icon><CopyDocument /></el-icon>
+        </button>
+        <button
+          v-if="canEdit(message)"
+          class="message-action-btn"
+          title="编辑"
+          @click="startEdit(message)"
+        >
+          <el-icon><EditPen /></el-icon>
+        </button>
+        <button
+          v-if="canDelete(message)"
+          class="message-action-btn"
+          title="删除"
+          @click="handleDelete(message)"
+        >
+          <el-icon><Delete /></el-icon>
+        </button>
+      </div>
+    </article>
+    <article v-if="showThinkingBubble" class="message-wrapper message-wrapper--assistant">
+      <div
+        class="message-bubble message-bubble--assistant message-bubble--thinking"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <span class="message-bubble-role">{{ roleLabelMap.assistant }}</span>
+        <div class="message-bubble-thinking">
+          <span class="message-bubble-thinking-text">{{
+            props.thinkingText || '正在整理回答'
+          }}</span>
+          <span class="message-bubble-thinking-dots" aria-hidden="true">
+            <i></i>
+            <i></i>
+            <i></i>
+          </span>
+        </div>
       </div>
     </article>
   </div>
@@ -368,8 +406,25 @@ function showMessageStatusPlaceholder(message: Message) {
   gap: 16px;
 }
 
+.message-wrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+
+  &--user {
+    align-items: flex-end;
+  }
+
+  &--assistant {
+    align-items: flex-start;
+  }
+
+  &--system {
+    align-items: center;
+  }
+}
+
 .message-bubble {
-  position: relative;
   max-width: 760px;
   max-width: 100%;
   padding: 16px 18px;
@@ -378,13 +433,8 @@ function showMessageStatusPlaceholder(message: Message) {
   color: var(--text-primary);
 
   &--user {
-    margin-left: auto;
     background: var(--bg-user-msg);
     color: var(--text-inverse);
-  }
-
-  &--assistant {
-    margin-right: auto;
   }
 
   &--thinking {
@@ -392,7 +442,6 @@ function showMessageStatusPlaceholder(message: Message) {
   }
 
   &--system {
-    margin: 0 auto;
     background: var(--bg-system-msg);
   }
 
@@ -403,7 +452,6 @@ function showMessageStatusPlaceholder(message: Message) {
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    user-select: none;
   }
 
   &-time {
@@ -451,13 +499,55 @@ function showMessageStatusPlaceholder(message: Message) {
       border-radius: 0 12px 12px 0;
     }
 
-    :deep(pre) {
+    :deep(.code-block) {
+      position: relative;
       margin: 0 0 0.85em;
-      padding: 14px 16px;
-      overflow-x: auto;
       border-radius: 14px;
+      overflow: hidden;
       background: rgba(12, 23, 40, 0.92);
-      color: #f5f7fa;
+
+      .code-block-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 14px;
+        background: rgba(0, 0, 0, 0.25);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+        .code-lang-label {
+          font-size: 11px;
+          font-weight: 600;
+          color: rgba(255, 255, 255, 0.5);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+
+        .code-block-copy {
+          padding: 2px 10px;
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          border-radius: 6px;
+          background: transparent;
+          color: rgba(255, 255, 255, 0.6);
+          font-size: 11px;
+          cursor: pointer;
+          transition: all 0.15s;
+
+          &:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+          }
+        }
+      }
+
+      code.hljs {
+        display: block;
+        padding: 14px 16px;
+        overflow-x: auto;
+        background: transparent !important;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: 0.92em;
+        line-height: 1.6;
+      }
     }
 
     :deep(code) {
@@ -466,14 +556,6 @@ function showMessageStatusPlaceholder(message: Message) {
       background: var(--bg-code-inline);
       font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
       font-size: 0.95em;
-    }
-
-    :deep(pre code) {
-      padding: 0;
-      border-radius: 0;
-      background: transparent;
-      color: inherit;
-      font-size: 0.92em;
     }
 
     :deep(table) {
@@ -655,38 +737,6 @@ function showMessageStatusPlaceholder(message: Message) {
     }
   }
 
-  &-actions {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    display: none;
-    gap: 4px;
-  }
-
-  &:hover &-actions {
-    display: flex;
-  }
-
-  &-action-btn {
-    width: 28px;
-    height: 28px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background: var(--bg-element);
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-size: 14px;
-    padding: 0;
-
-    &:hover {
-      background: var(--bg-surface);
-      color: var(--accent);
-    }
-  }
-
   &-edit-textarea {
     width: 100%;
     padding: 10px;
@@ -713,6 +763,38 @@ function showMessageStatusPlaceholder(message: Message) {
   }
 }
 
+.message-actions {
+  display: flex;
+  gap: 4px;
+  padding: 6px 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.message-wrapper:hover .message-actions {
+  opacity: 1;
+}
+
+.message-action-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+
+  &:hover {
+    background: var(--bg-surface);
+    color: var(--accent);
+  }
+}
+
 @keyframes blink {
   50% {
     opacity: 0;
@@ -720,8 +802,8 @@ function showMessageStatusPlaceholder(message: Message) {
 }
 
 @media (hover: none), (max-width: 960px) {
-  .message-bubble-actions {
-    display: flex;
+  .message-actions {
+    opacity: 1;
   }
 }
 

@@ -107,13 +107,9 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     function finalizeAssistantMessage(message: Message) {
-      if (!isCurrentController()) {
-        return
-      }
-
       upsertMessage(message)
 
-      if (activeStreamingMessageId.value === message.id) {
+      if (isCurrentController() && activeStreamingMessageId.value === message.id) {
         clearActiveStream(controller)
       }
 
@@ -227,16 +223,15 @@ export const useChatStore = defineStore('chat', () => {
           return
         }
 
+        updateMessage(generatingMessage.id, (msg) => {
+          if (msg.status === 'generating') return { ...msg, status: 'failed' }
+          return msg
+        })
         console.error('Failed to resume message stream:', error)
-        clearActiveStream(controller)
       })
       .finally(() => {
-        const stillGenerating = messages.value.some(
-          (message) => message.id === generatingMessage.id && message.status === 'generating'
-        )
-
-        if (!stillGenerating) {
-          clearActiveStream(controller)
+        if (activeStreamAbortController === controller) {
+          clearActiveStream()
         }
       })
   }
@@ -297,11 +292,35 @@ export const useChatStore = defineStore('chat', () => {
     }
     streamingStatusText.value = '正在思考问题...'
 
+    // Optimistic UI: show user message immediately
+    const tempId = `temp-user-${Date.now()}`
+    messages.value = [
+      ...messages.value,
+      {
+        id: tempId,
+        conversationId,
+        role: 'user' as const,
+        content,
+        fileList: [],
+        status: 'completed' as const,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ]
+
     try {
+      const handlers = buildStreamHandlers(conversationId, controller)
+      handlers.onUserMessage = (userMessage) => {
+        messages.value = messages.value.map((m) =>
+          m.id === tempId ? userMessage : m
+        )
+        void loadConversations(true)
+      }
+
       const result = await streamMessage(
         conversationId,
         { content },
-        buildStreamHandlers(conversationId, controller),
+        handlers,
         controller.signal
       )
 
@@ -315,15 +334,21 @@ export const useChatStore = defineStore('chat', () => {
         }
       }
 
-      throw error
+      const failedMessageId = activeStreamingMessageId.value
+      if (failedMessageId) {
+        updateMessage(failedMessageId, (msg) => {
+          if (msg.status === 'generating') return { ...msg, status: 'failed' }
+          return msg
+        })
+      }
+      console.error('Stream message error:', error)
+      return {
+        conversationId,
+        assistantMessageId: failedMessageId || undefined
+      }
     } finally {
-      const stillGenerating = messages.value.some(
-        (message) =>
-          message.id === activeStreamingMessageId.value && message.status === 'generating'
-      )
-
-      if (!stillGenerating) {
-        clearActiveStream(controller)
+      if (activeStreamAbortController === controller) {
+        clearActiveStream()
       }
     }
   }
@@ -388,10 +413,7 @@ export const useChatStore = defineStore('chat', () => {
     const editedIndex = messages.value.findIndex((m) => m.id === messageId)
     if (editedIndex === -1) return
 
-    messages.value = [
-      ...messages.value.slice(0, editedIndex),
-      updated
-    ]
+    messages.value = [...messages.value.slice(0, editedIndex), updated]
 
     detachActiveStream()
 
@@ -412,13 +434,18 @@ export const useChatStore = defineStore('chat', () => {
       )
     } catch (error) {
       if (isAbortError(error)) return
-      throw error
+
+      const failedMessageId = activeStreamingMessageId.value
+      if (failedMessageId) {
+        updateMessage(failedMessageId, (msg) => {
+          if (msg.status === 'generating') return { ...msg, status: 'failed' }
+          return msg
+        })
+      }
+      console.error('Regenerate message error:', error)
     } finally {
-      const stillGenerating = messages.value.some(
-        (m) => m.id === activeStreamingMessageId.value && m.status === 'generating'
-      )
-      if (!stillGenerating) {
-        clearActiveStream(controller)
+      if (activeStreamAbortController === controller) {
+        clearActiveStream()
       }
     }
   }

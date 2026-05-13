@@ -83,6 +83,7 @@ type MessageGenerationContext = {
   memoryContext: string[]
 }
 
+/** 加载会话历史 + 用户长期记忆，组装成 LLM 上下文 */
 async function loadMessageGenerationContext(userId: string, conversationId: string) {
   const [history, memories] = await Promise.all([
     prisma.message.findMany({
@@ -186,6 +187,7 @@ function cloneMessage(message: PrismaMessage): PrismaMessage {
   }
 }
 
+/** 向 task 所有 subscriber 广播事件 */
 function broadcastToTask(task: StreamTask, callback: (handlers: StreamMessageHandlers) => void) {
   for (const handlers of task.subscribers) {
     try {
@@ -196,6 +198,7 @@ function broadcastToTask(task: StreamTask, callback: (handlers: StreamMessageHan
   }
 }
 
+/** 注册 subscriber，新连接可选重播已有消息 */
 function subscribeToTask(
   task: StreamTask,
   handlers: StreamMessageHandlers,
@@ -230,6 +233,7 @@ function waitForAbort(signal?: AbortSignal) {
   })
 }
 
+/** 等待 task 完成（比赛 task.completion 与客户端断开） */
 async function waitForTaskSubscription(
   task: StreamTask,
   handlers: StreamMessageHandlers,
@@ -249,6 +253,11 @@ async function waitForTaskSubscription(
   }
 }
 
+/**
+ * 持久化流式消息内容到 DB
+ * - force=true：写入最终内容（streaming 已结束），可安全替换 task.assistantMessage
+ * - force=false：rate-limit 控制写入频率，回调中只更新 tracking 变量，不覆写内存中的消息对象
+ */
 async function persistTaskMessage(task: StreamTask, force = false) {
   const contentChanged = task.assistantMessage.content !== task.lastPersistedContent
   const statusChanged = task.assistantMessage.status !== task.lastPersistedStatus
@@ -269,12 +278,17 @@ async function persistTaskMessage(task: StreamTask, force = false) {
     }
   }
 
-  task.flushPromise = task.flushPromise.then(async () => {
+  if (force) {
+    const finalContent = task.assistantMessage.content
+    const finalStatus = task.assistantMessage.status
+
+    await task.flushPromise.catch(() => {})
+
     const persisted = await prisma.message.update({
       where: { id: task.assistantMessage.id },
       data: {
-        content: task.assistantMessage.content,
-        status: task.assistantMessage.status
+        content: finalContent,
+        status: finalStatus
       }
     })
 
@@ -282,11 +296,30 @@ async function persistTaskMessage(task: StreamTask, force = false) {
     task.lastPersistedContent = persisted.content
     task.lastPersistedStatus = persisted.status
     task.lastPersistedAt = Date.now()
+    return
+  }
+
+  task.flushPromise = task.flushPromise.then(async () => {
+    const contentToPersist = task.assistantMessage.content
+    const statusToPersist = task.assistantMessage.status
+
+    const persisted = await prisma.message.update({
+      where: { id: task.assistantMessage.id },
+      data: {
+        content: contentToPersist,
+        status: statusToPersist
+      }
+    })
+
+    task.lastPersistedContent = contentToPersist
+    task.lastPersistedStatus = statusToPersist
+    task.lastPersistedAt = Date.now()
   })
 
   await task.flushPromise
 }
 
+/** 用户取消：持久化 → 广播 cancelled → 后台标题生成 */
 async function finalizeTaskAsCancelled(task: StreamTask) {
   task.latestStatus = null
   task.assistantMessage = {
@@ -295,8 +328,11 @@ async function finalizeTaskAsCancelled(task: StreamTask) {
     updatedAt: new Date()
   }
 
-  await persistTaskMessage(task, true)
-  await task.conversationMetadataTask
+  try {
+    await persistTaskMessage(task, true)
+  } catch (persistError) {
+    console.error('Failed to persist cancelled message:', persistError)
+  }
 
   broadcastToTask(task, (handlers) => {
     handlers.onAssistantCancelled?.({
@@ -304,8 +340,15 @@ async function finalizeTaskAsCancelled(task: StreamTask) {
       conversationId: task.assistantMessage.conversationId
     })
   })
+
+  try {
+    await task.conversationMetadataTask
+  } catch (metaError) {
+    console.error('Failed to update conversation metadata:', metaError)
+  }
 }
 
+/** 异常失败：持久化 → 广播 failed → 后台标题生成 */
 async function finalizeTaskAsFailed(task: StreamTask, error: unknown) {
   task.latestStatus = null
   task.assistantMessage = {
@@ -314,8 +357,11 @@ async function finalizeTaskAsFailed(task: StreamTask, error: unknown) {
     updatedAt: new Date()
   }
 
-  await persistTaskMessage(task, true)
-  await task.conversationMetadataTask
+  try {
+    await persistTaskMessage(task, true)
+  } catch (persistError) {
+    console.error('Failed to persist failed message:', persistError)
+  }
 
   const message = error instanceof Error ? error.message : '流式消息处理失败'
 
@@ -326,25 +372,29 @@ async function finalizeTaskAsFailed(task: StreamTask, error: unknown) {
       message
     })
   })
+
+  try {
+    await task.conversationMetadataTask
+  } catch (metaError) {
+    console.error('Failed to update conversation metadata:', metaError)
+  }
 }
 
+/** 正常完成：持久化 → 立即广播 assistant-done → 后台记忆提取 + 标题生成 */
 async function finalizeTaskAsCompleted(task: StreamTask) {
   task.latestStatus = null
+
   task.assistantMessage = {
     ...task.assistantMessage,
     status: MessageStatus.completed,
     updatedAt: new Date()
   }
 
-  await persistTaskMessage(task, true)
-
-  scheduleUserMemoryExtraction(task.userId, {
-    userMessage: task.latestUserMessage,
-    existingMemories: task.existingMemories,
-    modelOverride: task.modelOverride
-  })
-
-  await task.conversationMetadataTask
+  try {
+    await persistTaskMessage(task, true)
+  } catch (persistError) {
+    console.error('Failed to persist completed message:', persistError)
+  }
 
   broadcastToTask(task, (handlers) => {
     handlers.onAssistantDone?.({
@@ -352,8 +402,26 @@ async function finalizeTaskAsCompleted(task: StreamTask) {
       conversationId: task.assistantMessage.conversationId
     })
   })
+
+  scheduleUserMemoryExtraction(task.userId, {
+    userMessage: task.latestUserMessage,
+    existingMemories: task.existingMemories,
+    modelOverride: task.modelOverride
+  })
+
+  try {
+    await task.conversationMetadataTask
+  } catch (metaError) {
+    console.error('Failed to update conversation metadata:', metaError)
+  }
 }
 
+/**
+ * 流式主循环（异步，void 执行）：
+ * 1. 消费 LLM stream，每个 delta 拼接到 content 并广播
+ * 2. 周期性 persist 到 DB（非 force，不覆写内存消息）
+ * 3. stream 结束后根据结果进入 completed / cancelled / failed
+ */
 function startStreamTask(task: StreamTask) {
   activeStreamTasks.set(task.assistantMessage.id, task)
 
@@ -418,6 +486,10 @@ function startStreamTask(task: StreamTask) {
   })()
 }
 
+/**
+ * 创建 StreamTask 结构体，初始化 flushPromise 链，
+ * 然后启动 startStreamTask 异步主循环
+ */
 function createStreamTask(params: {
   assistantMessage: PrismaMessage
   userId: string
@@ -589,6 +661,13 @@ export async function createMessage(
   }
 }
 
+/**
+ * 流式消息入口：
+ * 1. 创建 user 消息 + 空 assistant 消息到 DB，立即广播让前端展示
+ * 2. 加载上下文（历史 + 记忆），获取模型偏好
+ * 3. 创建流式任务（createStreamTask），订阅等待完成
+ * 4. 异常时将 assistant 消息标记为 failed
+ */
 export async function streamMessage(
   userId: string,
   conversationId: string,
@@ -675,6 +754,12 @@ export async function streamMessage(
   }
 }
 
+/**
+ * 断流恢复 / 订阅已有消息：
+ * - 如果 task 还在内存中活跃（activeStreamTasks），订阅并重播当前内容
+ * - 如果 task 已结束，直接返回 DB 中消息的终态（completed / cancelled / failed）
+ * - 如果 DB 里是 generating 但没有活跃 task，按孤消息处理标记为 failed
+ */
 export async function subscribeMessageStream(
   userId: string,
   conversationId: string,
@@ -726,6 +811,7 @@ export async function subscribeMessageStream(
   }
 }
 
+/** 编辑用户消息 → 删除其后所有消息（截断会话） */
 export async function updateMessage(
   userId: string,
   conversationId: string,
@@ -769,6 +855,7 @@ export async function updateMessage(
   return serializeMessageForClient(updated)
 }
 
+/** 重新生成：基于指定 user 消息重新流式生成 assistant 回复 */
 export async function regenerateMessage(
   userId: string,
   conversationId: string,
@@ -869,6 +956,7 @@ export async function deleteMessage(
   })
 }
 
+/** 手动停止生成 */
 export async function cancelMessageStream(
   userId: string,
   conversationId: string,
